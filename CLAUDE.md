@@ -23,8 +23,10 @@ design, impact, innovation, and presentation.
 fetch-it/
 ├── app/                 Kotlin Multiplatform app (Compose Multiplatform shared UI, Android + iOS)
 ├── functions/           Firebase Cloud Functions (TypeScript) — the backend
+│   ├── src/             function code (index.ts, fetch/ pipeline, lib/ gemini + channel3 + image) → built to lib/
+│   ├── test/            emulator checks: rules.mjs (`npm run test:rules`), fetchItem.mjs
 │   ├── spikes/          throwaway experiments (spike1.mjs: photo → Gemini → Channel3)
-│   ├── fixtures/        test images; fixtures/out/ = raw spike output (gitignored)
+│   ├── fixtures/        test images (unbranded only); fixtures/out/ = raw spike output (gitignored)
 │   └── .env.local       local secrets, read by emulators + spikes, never deployed (gitignored)
 ├── firestore.rules      Firestore security rules
 ├── firebase.json        Firebase config (Firestore, Functions, emulators)
@@ -36,6 +38,9 @@ fetch-it/
 
 - Open `app/` in Android Studio. Work on `functions/` from the terminal / Claude Code.
 - Firebase project: `fetchit-437a0` (see `.firebaserc`). Emulators: Auth 9090, Functions 5001, Firestore 8080.
+  Run them with `npm run build` in `functions/`, then `npx firebase-tools@15 emulators:start --only functions,firestore,auth`
+  from the repo root (the global CLI 13.x predates Node 22 functions). `npm run build:watch` hot-reloads.
+- Functions: ESM TypeScript, Node 22, firebase-functions 7, firebase-admin 14, region us-central1.
 - **Secrets live only in `functions/.env.local` (gitignored, never deployed) locally, and in Cloud Secret Manager
   (`defineSecret`) for deployed functions. Never in `app/`, never committed, never in `functions/.env`.**
 - The app talks **only to our Functions** (and reads its own Firestore docs). It never calls PayPal, Channel3,
@@ -63,16 +68,16 @@ KMP app ──Firebase Auth──▶ Cloud Functions (TypeScript)
   **Rules: clients may only read their own `users/{uid}` data; all writes go through Functions** (Admin SDK
   bypasses rules). Nothing else is readable.
 - **FCM** for approval notifications ("Needs your OK"). **App Check** later.
-- **AI:** Gemini via `@google/genai` on the server only. Flash model for vision + agent loop (check Google's docs
-  for the current model id); upgrade if needed.
+- **AI:** Gemini via `@google/genai` on the server only. Identify uses `gemini-3.5-flash-lite` (minimal thinking);
+  see Status → Spike 1 / fetchItem for model notes.
 - **PayPal:** REST via fetch or the PayPal Agent Toolkit (check current npm package name in PayPal docs).
 - **Channel3:** REST API / official TS SDK (docs.trychannel3.com).
 
 ### Functions (first pass)
 | Function | Purpose |
 |---|---|
-| `identify` | image → item attributes + search query |
-| `search` | query/image → ranked offers (filtered by user sizes) |
+| `health` | liveness check (onRequest) |
+| `fetchItem` ✅ | photo → identified item + top 5 offers with live price, sizes, stock (callable, streams) |
 | `agentTurn` | user message/voice text + context → agent reply, picks, actions |
 | `purchase` | buy an offer: rules check → auto-buy (with undo window) or approval request (FCM) |
 | `approvePurchase` | user approved (after biometric on device) |
@@ -151,6 +156,8 @@ Bottom nav: Fetch · Activity · Rules + round "+" (upload).
 ## Status
 - [x] PayPal sandbox accounts + app created (US)
 - [x] Repo structure: `app/` (KMP template) + `functions/` (Firebase) + secrets in `functions/.env.local`
+- [x] `functions/` converted to TypeScript on Node 22; `firestore.rules`: users/{uid}/** readable by that user only,
+      all client writes denied, everything else denied (`npm run test:rules`, 6 checks)
 - [x] Verify sandbox credentials (OAuth token curl) — 200 OK; token has vault payment-tokens readwrite,
       shipping trackers readwrite, webhooks, refund scopes
 - [x] Spike 1: photo → vision → Channel3 search; check size variants + stock (`functions/spikes/spike1.mjs`). Learned:
@@ -167,7 +174,29 @@ Bottom nav: Fetch · Activity · Rules + round "+" (upload).
         Always re-fetch product detail before the rules check / purchase.
       - Image search finds look-alikes across categories (jackets, overshirts for a fleece); text search stays
         in-category but generic. Same item often appears as several products (one per colorway) with identical
-        title + store. Next: filter/re-rank by Gemini's category, collapse same title + store.
+        title + store.
+- [x] `fetchItem` callable (`functions/src/fetch/`). Auth required. Pipeline:
+      resize (1024 px for Gemini, 768 px for Channel3) → **in parallel** Gemini identify + Channel3 image search →
+      text search as soon as identify returns → filter both lists to target categories → RRF merge, dedupe by
+      product id and normalized title + merchant (same title at one store = colourways, kept as `colors`) →
+      product detail for the top 5 → offers with **detail price only**, per-size stock, colours, timings.
+      Streams `image_matches` → `identified` → `offers` when the client asks for streaming.
+      Lamp in emulator: 3.1–6.1 s end to end (median ~3.5 s; Gemini 1.7–2.2 s; slow runs = Channel3 variance).
+      Learned while tuning:
+      - Gemini Flash-Lite time is almost all time-to-first-token (1.5–5 s, random). Streaming saves ~150 ms → not
+        worth it. `mediaResolution: MEDIUM` halves image tokens (1100 → 543) with the same answers. Hedge: if no
+        answer in 2.5 s, send a second Flash-Lite call and take the first; on 429/5xx go to `gemini-3.6-flash`.
+        3.5 Flash-Lite accepts `thinkingLevel: MINIMAL`; `thinkingBudget: 0` is rejected.
+      - Channel3 `limit` matters most: limit 10 ≈ 1.1 s steady; limit 20 swings 1.4–3.6 s. Image search at
+        768 px ≈ 1.3 s vs ~3.5 s at 1024 px (7/10 same top matches; 512 px no faster, 4/10).
+      - Channel3 caches: repeated queries/details come back much faster, so benchmark with fresh photos.
+      - Parallel product-detail calls slow down uncached (5 at once ≈ 1.4 s vs 0.35 s for one). We prefetch details
+        for the top image matches while Gemini runs (usually 2 of the final 5 hit the cache).
+      - Products carry `colors: [{hex, percentage}]` (dominant photo colours) → swatches for colourway options.
+      - Send `x-user-id` (Firebase uid) so buy links/commissions are attributed per user.
+      - Category filter: Gemini's free-text category ≠ Channel3 slugs, so targets = slugs whose name shares a word
+        with Gemini's item_type/category + slugs that dominate the text-search top 10.
+      - [ ] Not yet tested with clothing (sizes path) — needs an unbranded clothing photo in `functions/fixtures/`.
 - [x] Spike 2: approve PayPal once with vault, then charge again server-side with no redirect
       (`server/spikes/spike2.mjs`). Learned:
       - Requires **Save payment methods** enabled on the sandbox app, else checkout shows "Something went wrong" after login.
