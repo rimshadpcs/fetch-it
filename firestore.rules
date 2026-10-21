@@ -1,9 +1,14 @@
 rules_version = '2';
 
+// Clients only ever read their own data. Every write goes through Cloud Functions,
+// which use the Admin SDK and bypass these rules.
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if false;
+    match /users/{uid}/{document=**} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
     }
+
+    // Anything not matched above is denied by default.
   }
 }
