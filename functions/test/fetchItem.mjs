@@ -97,7 +97,7 @@ for (const file of files) {
   } else if (first.status === "choose") {
     for (const [n] of first.items.slice(0, MAX_ITEMS).entries()) {
       console.log(`\n -- chose [${n}] ${first.items[n].item_type}`);
-      const r = await call({ imageBase64, itemIndex: n, items: first.items });
+      const r = await call({ imageBase64, itemIndex: n, itemsToken: first.itemsToken });
       printOffers(r.offers);
     }
   }

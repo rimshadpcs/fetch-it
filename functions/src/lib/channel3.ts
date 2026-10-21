@@ -94,9 +94,12 @@ export class Channel3 {
   /**
    * Free. The only source of real prices and per-size stock. `options` selects a variant, e.g. {Color: "Coco"}
    * → `?option_Color=Coco`; sizes, price and images then describe that colour.
+   * Detail returns ONE preferred store's offer unless `websiteIds` pins it (domains work): search can list
+   * Best Buy at $34.99 while detail only shows the brand's own store at $49.99.
    */
-  product(id: string, options: Record<string, string> = {}) {
+  product(id: string, options: Record<string, string> = {}, websiteIds: string[] = []) {
     const qs = new URLSearchParams(Object.entries(options).map(([name, label]) => [`option_${name}`, label]));
+    if (websiteIds.length) qs.set("website_ids", websiteIds.join(","));
     const query = qs.size ? `?${qs}` : "";
     return this.call<C3Product>(`/v1/products/${encodeURIComponent(id)}${query}`, undefined, 5000);
   }

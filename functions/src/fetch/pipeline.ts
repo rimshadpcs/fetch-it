@@ -40,6 +40,8 @@ export interface RankedOffer {
   availability: string;
   /** The colour we picked to match the photo (or the store default). */
   color: string | null;
+  /** Variant option name for `color` ("Color", "Colour"), used to re-fetch the same variant at purchase. */
+  colorOption: string | null;
   /** Sizes that exist in `color` and aren't sold out; null when the product has no size option. */
   sizes: SizeOption[] | null;
   colors: ColorOption[];
@@ -242,6 +244,7 @@ function toOffer(c: Candidate, detail: C3Product): RankedOffer | null {
     currency: offer.price.currency,
     availability: offer.availability,
     color,
+    colorOption: color && colorOption ? colorOption.name : null,
     sizes,
     colors,
     matchedBy: [...c.sources],

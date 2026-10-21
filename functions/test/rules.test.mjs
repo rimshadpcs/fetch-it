@@ -1,0 +1,129 @@
+// Unit tests for the house rules engine. Run: npm test
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { decide, money } from "../lib/rules.js";
+
+const rules = {
+  currency: "USD",
+  monthlyBudget: 300,
+  perItemLimit: 75,
+  allowedCategories: ["home-garden", "apparel-accessories"],
+  askBeforeNewStore: true,
+  onlyShipToSavedPlaces: true,
+  askIfUnsureAboutSize: true,
+};
+const lamp = {
+  price: 42,
+  currency: "USD",
+  categoryPath: ["home-garden", "lighting", "lamps", "table-lamps"],
+  merchant: "lamps.example",
+  inStock: true,
+  sizes: null,
+};
+const home = { id: "home", label: "Home" };
+const base = { rules, monthToDate: 0, offer: lamp, place: home, knownStores: ["lamps.example"], paymentLinked: true };
+const failed = (r) => r.reasons.filter((x) => !x.pass).map((x) => x.rule);
+const msg = (r, rule) => r.reasons.find((x) => x.rule === rule).message;
+
+test("within every rule → AUTO_BUY, all reasons pass", () => {
+  const r = decide(base);
+  assert.equal(r.decision, "AUTO_BUY");
+  assert.deepEqual(failed(r), []);
+  assert.equal(msg(r, "per_item_limit"), "$42 is within your $75 limit");
+});
+
+test("over the per-item limit → NEEDS_APPROVAL with the overage in words", () => {
+  const r = decide({ ...base, offer: { ...lamp, price: 128 } });
+  assert.equal(r.decision, "NEEDS_APPROVAL");
+  assert.deepEqual(failed(r), ["per_item_limit"]);
+  assert.equal(msg(r, "per_item_limit"), "$53 over your $75 limit");
+});
+
+test("approval turns ask-failures into AUTO_BUY but never overrides a block", () => {
+  assert.equal(decide({ ...base, offer: { ...lamp, price: 128 }, approved: true }).decision, "AUTO_BUY");
+  const blocked = decide({ ...base, offer: { ...lamp, categoryPath: ["electronics", "audio"] }, approved: true });
+  assert.equal(blocked.decision, "BLOCKED");
+});
+
+test("category outside the allowed list → BLOCKED", () => {
+  const r = decide({ ...base, offer: { ...lamp, categoryPath: ["electronics", "audio", "headphones"] } });
+  assert.equal(r.decision, "BLOCKED");
+  assert.deepEqual(failed(r), ["category"]);
+  assert.equal(msg(r, "category"), "Electronics isn't in your allowed categories");
+});
+
+test("monthly budget is a hard cap, counting what's already spent", () => {
+  const r = decide({ ...base, monthToDate: 280 });
+  assert.equal(r.decision, "BLOCKED");
+  assert.equal(msg(r, "monthly_budget"), "$22 over your $300 monthly budget ($280 spent so far)");
+  assert.equal(decide({ ...base, monthToDate: 258 }).decision, "AUTO_BUY"); // exactly at budget is fine
+});
+
+test("new store → NEEDS_APPROVAL only when the rule is on", () => {
+  const r = decide({ ...base, knownStores: [] });
+  assert.equal(r.decision, "NEEDS_APPROVAL");
+  assert.equal(msg(r, "new_store"), "First time buying from lamps.example");
+  assert.equal(decide({ ...base, knownStores: [], rules: { ...rules, askBeforeNewStore: false } }).decision, "AUTO_BUY");
+});
+
+test("unsaved address → BLOCKED when only-ship-to-saved-places is on", () => {
+  assert.equal(decide({ ...base, place: null }).decision, "BLOCKED");
+  assert.equal(decide({ ...base, place: null, rules: { ...rules, onlyShipToSavedPlaces: false } }).decision, "AUTO_BUY");
+});
+
+test("out of stock or wrong currency → BLOCKED", () => {
+  assert.equal(decide({ ...base, offer: { ...lamp, inStock: false } }).decision, "BLOCKED");
+  assert.equal(decide({ ...base, offer: { ...lamp, currency: "EUR" } }).decision, "BLOCKED");
+});
+
+const hoodie = {
+  ...lamp,
+  price: 40,
+  categoryPath: ["apparel-accessories", "clothing", "hoodies-3"],
+  sizes: [
+    { label: "SML", size: "S", available: "InStock" },
+    { label: "MED", size: "M", available: "OutOfStock" },
+    { label: "LRG", size: "L", available: "InStock" },
+  ],
+};
+
+test("sizes: canonical or store label both match; sold out and missing sizes block", () => {
+  assert.equal(decide({ ...base, offer: hoodie, size: "L" }).decision, "AUTO_BUY");
+  assert.equal(decide({ ...base, offer: hoodie, size: "lrg" }).decision, "AUTO_BUY");
+  const soldOut = decide({ ...base, offer: hoodie, size: "M" });
+  assert.equal(soldOut.decision, "BLOCKED");
+  assert.equal(msg(soldOut, "size"), "Size MED is sold out");
+  assert.equal(decide({ ...base, offer: hoodie, size: "XL" }).decision, "BLOCKED");
+});
+
+test("no size given → ask (or block when ask-if-unsure is off)", () => {
+  const r = decide({ ...base, offer: hoodie });
+  assert.equal(r.decision, "NEEDS_APPROVAL");
+  assert.equal(msg(r, "size"), "I'm not sure which size you want");
+  assert.equal(decide({ ...base, offer: hoodie, rules: { ...rules, askIfUnsureAboutSize: false } }).decision, "BLOCKED");
+});
+
+test("several failures are all reported; block wins over ask", () => {
+  const r = decide({ ...base, offer: { ...lamp, price: 128, categoryPath: ["electronics"] }, knownStores: [] });
+  assert.equal(r.decision, "BLOCKED");
+  assert.deepEqual(failed(r).sort(), ["category", "new_store", "per_item_limit"]);
+});
+
+test("store no longer lists it → BLOCKED with no money reasons", () => {
+  const r = decide({ ...base, offer: { ...lamp, price: null, inStock: false } });
+  assert.equal(r.decision, "BLOCKED");
+  assert.equal(msg(r, "in_stock"), "Not available at lamps.example any more");
+  assert.equal(r.reasons.some((x) => x.rule === "per_item_limit" || x.rule === "monthly_budget"), false);
+});
+
+test("no linked PayPal → BLOCKED", () => {
+  const r = decide({ ...base, paymentLinked: false });
+  assert.equal(r.decision, "BLOCKED");
+  assert.equal(msg(r, "paypal"), "Link PayPal first");
+});
+
+test("money formatting", () => {
+  assert.equal(money(53), "$53");
+  assert.equal(money(42.5), "$42.50");
+  assert.equal(money(10, "EUR"), "EUR 10");
+});

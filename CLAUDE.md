@@ -79,9 +79,9 @@ KMP app ──Firebase Auth──▶ Cloud Functions (TypeScript)
 | `health` | liveness check (onRequest) |
 | `fetchItem` ✅ | photo → items in it ("Which one?") → top 5 offers for one item with live price, colour, sizes, stock (callable, streams) |
 | `agentTurn` | user message/voice text + context → agent reply, picks, actions |
-| `purchase` | buy an offer: rules check → auto-buy (with undo window) or approval request (FCM) |
-| `approvePurchase` | user approved (after biometric on device) |
-| `undoPurchase` | refund within undo window |
+| `purchaseOffer` ✅ | `{offerId, size?, placeId}` → live price → rules → BLOCKED / NEEDS_APPROVAL (FCM placeholder) / AUTO_BUY (streams decision, 5 s undo, then vault charge) |
+| `approvePurchase` ✅ | `{purchaseId}` after the fingerprint: re-checks live price + hard rules, charges right away |
+| `undoPurchase` ✅ | `{purchaseId}`: undo an auto-buy inside the window (nothing charged) or decline an approval |
 | `setRules` | update house rules (reads come straight from Firestore) |
 | `setProfile` | sizes, addresses, dog name |
 | `paypalLinkStart` · `paypalLinkComplete` | first-time PayPal approval + vault |
@@ -97,6 +97,27 @@ Rules: monthly budget, per-item auto-buy limit, allowed categories, ask before a
 only ship to saved addresses, fingerprint over the limit, ask if unsure about size.
 
 Outcomes: `AUTO_BUY` (with ~5s undo) · `NEEDS_APPROVAL` · `BLOCKED` (nothing charged).
+
+`functions/src/rules.ts` → `decide()` returns the decision plus every check as `{rule, pass, onFail, message}`
+("$54 over your $75 limit"). Unit tests: `npm test` (`test/rules.test.mjs`).
+| Check | Fails → |
+|---|---|
+| PayPal linked · in stock / still listed (live price) · currency · category in path · monthly budget (hard cap, counts reserved auto-buys) · saved place · requested size missing / sold out | BLOCKED |
+| per-item limit · new store · size not given (ask-if-unsure) · price went up since approval | NEEDS_APPROVAL (approval overrides these, never a block) |
+
+### Data (Firestore)
+`users/{uid}/settings/rules` (HouseRules) · `places/{placeId}` (label, fullName, line1, line2, city, state,
+postalCode, countryCode) · `stores/{merchant}` · `spend/{YYYY-MM}` {total} · `purchases/{id}` · `activity/{id}`.
+PayPal vault token lives in top-level **`vault/{uid}`**, which clients can't read (rules test covers it).
+Purchase states: `blocked` · `needs_approval → approved|declined` · `pending_undo → undone|charging` ·
+`charging → completed|failed`. An auto-buy/approval reserves its price in `spend` inside the decision
+transaction (no double-spend races); undo/decline/failure releases it. Every transition writes an activity
+entry (status, summary, reasons, title, merchant, price, image, PayPal order id, timestamps).
+
+### Signed tokens (`functions/src/lib/sign.ts`, HMAC-SHA256 with `FETCH_SIGNING_KEY`)
+- `itemsToken` from fetchItem = the detected items, bound to uid + sha256 of the photo, 24 h. The second
+  call sends `{imageBase64, itemsToken, itemIndex}` (items aren't echoed, so app JSON re-encoding can't break it).
+- `offerId` on each offer = {productId, merchant, colour, title, image} bound to uid, 24 h. Never a price.
 
 ### PayPal flow (sandbox)
 1. First run: buyer approves PayPal once (browser sheet), with vaulting so we get a reusable payment token.
@@ -204,9 +225,9 @@ Bottom nav: Fetch · Activity · Rules + round "+" (upload).
         "Coco" (brown, the matching colour) has every size `exists: false`, while `?option_Color=Cement` gives
         M–XXL InStock. Size labels vary by store (S/M/L vs SML/MED/LRG).
 - [x] fetchItem v2: real-world photos (people, busy backgrounds, several items, screenshots).
-      **API:** `{imageBase64, itemIndex?, items?}` →
-      `status: "choose"` (several items: show "Which one?", then call again with `itemIndex` + the `items` it
-      returned, which skips Gemini) · `"results"` (one item, or the chosen one) · `"none"`.
+      **API:** `{imageBase64, itemIndex?, itemsToken?}` →
+      `status: "choose"` (several items: show "Which one?", then call again with `itemIndex` + the signed
+      `itemsToken` it returned, which skips Gemini) · `"results"` (one item, or the chosen one) · `"none"`.
       Stream events: `items` → `image_matches` → `offers`. The photo is only held in memory for the request;
       only a padded crop of the chosen item goes to Channel3.
       - Gemini returns **all** items (max 6, most prominent first) with `box_2d` [ymin,xmin,ymax,xmax] on 0–1000
@@ -239,5 +260,32 @@ Bottom nav: Fetch · Activity · Rules + round "+" (upload).
       - Repeat charge: create order with only `payment_source.paypal.vault_id` → returns `COMPLETED` on create
         (no separate capture call). Send a `PayPal-Request-Id` header.
       - Sandbox in a private window if the browser is logged into live paypal.com.
-- [ ] Functions skeleton (TypeScript) + Firestore rules + rules engine + deploy
+- [x] Purchase path: rules engine (`rules.ts`, 14 unit tests), `purchaseOffer` / `approvePurchase` /
+      `undoPurchase`, activity log, month-to-date spend, signed `itemsToken` + `offerId`.
+      `node test/purchase.mjs` seeds `users/scout-test` (rules: $300/month, $75/item, home-garden +
+      apparel-accessories, ask on new store, saved places only, ask if unsure about size; Home = 2211 N First
+      St, San Jose, CA 95131; sandbox vault token; known store wayfair.com) and runs (Oct 21, emulator + sandbox):
+      - $41.99 Wayfair lamp → AUTO_BUY → streamed at 2.8 s, charged after the undo window → PayPal
+        `9NE83181CG306990T` COMPLETED, shipped to Home.
+      - $129 AllModern throw → NEEDS_APPROVAL ("$54 over your $75 limit", "First time buying from
+        allmodern.com") → approvePurchase → `41H86773GG545443B` COMPLETED, shipped to Home.
+      - Best Buy earbuds → BLOCKED ("Electronics isn't in your allowed categories", "Not available at
+        bestbuy.com any more"), nothing charged.
+      - Lamp again → Undo after 1 s → `undone`, no PayPal order, spend released. Month-to-date: $170.99.
+      - Tampered offerId, another user's offerId, forged itemsToken → rejected; unsaved place → BLOCKED.
+      Learned:
+      - **Channel3 product detail returns ONE preferred store's offer** (search listed Best Buy $34.99 +
+        Soundcore $49.99; detail only Soundcore). Purchases pin the store with `?website_ids=<domain>`; an
+        empty result means the listing is gone → blocked, never a silent store/price switch.
+      - PayPal vault orders accept `payment_source.paypal.experience_context.shipping_preference:
+        SET_PROVIDED_ADDRESS` + `purchase_units[0].shipping`; the order shows our saved address.
+        `PayPal-Request-Id` = purchase id makes charge retries idempotent.
+      - The undo window runs inside the purchaseOffer request (decision streamed first). If the instance dies
+        mid-window the purchase stays `pending_undo` → later: Cloud Tasks / a sweeper.
+      - Charges go to our sandbox merchant, not the retailer: ordering from the store (Channel3 checkout or
+        manual fulfilment) is still open.
+      - The emulator reads `.env.local` at start: restart it after adding a key.
+- [ ] Deploy: enable Secret Manager API on fetchit-437a0 and set GEMINI_API_KEY, CHANNEL3_API_KEY,
+      PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, FETCH_SIGNING_KEY (`firebase functions:secrets:set`)
+- [ ] FCM for "Needs your OK" (placeholder logs today) · PayPal link flow functions · webhooks · refunds
 - [ ] App: onboarding → fetch → results → buy/approve → activity

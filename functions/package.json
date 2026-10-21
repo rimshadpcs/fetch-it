@@ -8,7 +8,8 @@
     "serve": "npm run build && firebase emulators:start --only functions,firestore,auth",
     "deploy": "firebase deploy --only functions",
     "logs": "firebase functions:log",
-    "test:rules": "node test/rules.mjs"
+    "test:rules": "node test/rules.mjs",
+    "test": "npm run build && node --test test/*.test.mjs"
   },
   "engines": {
     "node": "22"
