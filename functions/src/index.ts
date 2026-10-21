@@ -9,3 +9,5 @@ export const health = onRequest((_req, res) => {
 
 export { fetchItem } from "./fetch/fetchItem.js";
 export { purchaseOffer, approvePurchase, undoPurchase } from "./purchase/purchase.js";
+export { watchOffer, checkWatches, checkWatchesNow } from "./purchase/watch.js";
+export { findSimilar } from "./fetch/findSimilar.js";

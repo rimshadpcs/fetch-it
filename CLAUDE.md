@@ -82,6 +82,10 @@ KMP app ──Firebase Auth──▶ Cloud Functions (TypeScript)
 | `purchaseOffer` ✅ | `{offerId, size?, placeId}` → live price → rules → BLOCKED / NEEDS_APPROVAL (FCM placeholder) / AUTO_BUY (streams decision, 5 s undo, then vault charge) |
 | `approvePurchase` ✅ | `{purchaseId}` after the fingerprint: re-checks live price + hard rules, charges right away |
 | `undoPurchase` ✅ | `{purchaseId}`: undo an auto-buy inside the window (nothing charged) or decline an approval |
+| `watchOffer` ✅ | `{offerId, targetPrice, size?, placeId?}` → `users/{uid}/watches/{id}` + Channel3 price tracking |
+| `checkWatches` ✅ | scheduled hourly: live price ≤ target → "Price dropped" activity → same purchase path (rules apply) |
+| `checkWatchesNow` ✅ | callable "check now" for the caller's own watches (how the emulator test runs a check) |
+| `findSimilar` ✅ | `{offerId, maxPrice?}`: "More like this" / "Find cheaper" via Channel3 `/v1/similar`, signed offers |
 | `setRules` | update house rules (reads come straight from Firestore) |
 | `setProfile` | sizes, addresses, dog name |
 | `paypalLinkStart` · `paypalLinkComplete` | first-time PayPal approval + vault |
@@ -108,7 +112,15 @@ Outcomes: `AUTO_BUY` (with ~5s undo) · `NEEDS_APPROVAL` · `BLOCKED` (nothing c
 ### Data (Firestore)
 `users/{uid}/settings/rules` (HouseRules) · `places/{placeId}` (label, fullName, line1, line2, city, state,
 postalCode, countryCode) · `stores/{merchant}` · `spend/{YYYY-MM}` {total} · `purchases/{id}` · `activity/{id}`.
+`watches/{id}` (status watching → triggered, target, last price, purchase id).
 PayPal vault token lives in top-level **`vault/{uid}`**, which clients can't read (rules test covers it).
+Spend is stored as integer `totalCents` (float increments drift). The watches collection-group query needs
+the field override in `firestore.indexes.json`.
+
+**Demo store:** charges go to our PayPal sandbox merchant and no order is placed with the real store. Every
+purchase and purchase activity entry carries `merchantOfRecord: "Fetch It demo store (PayPal sandbox)"`,
+`retailer` (the Channel3 store domain) and `retailerOrderStatus: "simulated"`; the app shows
+"Demo store · sandbox" from these.
 Purchase states: `blocked` · `needs_approval → approved|declined` · `pending_undo → undone|charging` ·
 `charging → completed|failed`. An auto-buy/approval reserves its price in `spend` inside the decision
 transaction (no double-spend races); undo/decline/failure releases it. Every transition writes an activity
@@ -285,6 +297,22 @@ Bottom nav: Fetch · Activity · Rules + round "+" (upload).
       - Charges go to our sandbox merchant, not the retailer: ordering from the store (Channel3 checkout or
         manual fulfilment) is still open.
       - The emulator reads `.env.local` at start: restart it after adding a key.
+- [x] Price watching + findSimilar + demo-store labels. `node test/purchase.mjs` now also (Oct 21):
+      - Watch the $41.99 Wayfair lamp at $50 → `checkWatchesNow` → "Price dropped to $41.99 (your target $50)"
+        → rules → AUTO_BUY → PayPal `8PJ30567YE2454526` COMPLETED; watch → `triggered`, second check buys
+        nothing. Clean run totals: orders `6PJ14576LL9206831` ($41.99), `4CP6202361664924Y` ($129),
+        `8PJ30567YE2454526` ($41.99); month-to-date exactly $212.98.
+      - findSimilar on the lamp: "More like this" 5 bedside lamps ($19.99–$107.88, 5.6 s);
+        "Find cheaper" (max $41.99) 5 lamps $19.99–$41.99 (1.5 s).
+      Learned:
+      - Channel3 price tracking (v0, per API key, shared by all our users — never stopped per user):
+        `POST /v0/price-tracking/start|stop {canonical_product_id}` → `{subscription_status}`;
+        `GET /v0/price-tracking/history/{id}` → `{history: [{timestamp, price, currency}]}` (the guide says
+        `price_history`); `GET /v0/price-tracking/subscriptions` → `{items, next_cursor}`. Price-change
+        webhooks need a public endpoint set in the Channel3 dashboard; we poll product detail (pinned to the
+        store) on a schedule instead, which also gives the store-specific price.
+      - `/v1/similar` rejects `filters.category`; it takes `category_ids` (slugs; a parent includes children),
+        plus age/gender/price like search.
 - [ ] Deploy: enable Secret Manager API on fetchit-437a0 and set GEMINI_API_KEY, CHANNEL3_API_KEY,
       PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, FETCH_SIGNING_KEY (`firebase functions:secrets:set`)
 - [ ] FCM for "Needs your OK" (placeholder logs today) · PayPal link flow functions · webhooks · refunds

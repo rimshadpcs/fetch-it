@@ -18,10 +18,30 @@ interface FetchItemRequest {
 export type FetchItemResponse = FetchResult & {
   /** Send back with `itemIndex` (and the same photo) to search one of these items. */
   itemsToken: string;
-  offers?: (RankedOffer & { offerId: string })[];
+  offers?: SignedOffer[];
 };
 
 const MAX_BYTES = 8 * 1024 * 1024;
+
+export type SignedOffer = RankedOffer & { offerId: string };
+
+/** Attach a signed offerId to each offer: product, store, colour, bound to the user. Never a price. */
+export function signOffers(key: string, uid: string, offers: RankedOffer[]): SignedOffer[] {
+  const exp = Date.now() + TOKEN_TTL_MS;
+  return offers.map((o) => ({
+    ...o,
+    offerId: sign(key, {
+      kind: "offer",
+      uid,
+      productId: o.productId,
+      merchant: o.merchant,
+      color: o.color && o.colorOption ? { option: o.colorOption, label: o.color } : null,
+      title: o.title,
+      imageUrl: o.imageUrl,
+      exp,
+    } satisfies OfferClaim),
+  }));
+}
 
 /**
  * Photo in, offers out. The photo is only held in memory for this request: it's never written to Storage,
@@ -95,19 +115,7 @@ export const fetchItem = onCall<FetchItemRequest, Promise<FetchItemResponse>, Fe
     return {
       ...result,
       itemsToken: signedItems,
-      offers: result.offers.map((o) => ({
-        ...o,
-        offerId: sign(key, {
-          kind: "offer",
-          uid,
-          productId: o.productId,
-          merchant: o.merchant,
-          color: o.color && o.colorOption ? { option: o.colorOption, label: o.color } : null,
-          title: o.title,
-          imageUrl: o.imageUrl,
-          exp,
-        } satisfies OfferClaim),
-      })),
+      offers: signOffers(key, uid, result.offers),
     };
   },
 );

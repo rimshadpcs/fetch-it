@@ -1,7 +1,7 @@
 import type { C3Product } from "../lib/channel3.js";
 import type { DetectedItem } from "../lib/gemini.js";
 
-export type Source = "image" | "text";
+export type Source = "image" | "text" | "similar";
 
 /** One listing after dedupe: the best-ranked product plus its other colourways at the same store. */
 export interface Candidate {

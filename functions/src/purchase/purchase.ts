@@ -18,6 +18,13 @@ import { fetchLiveOffer, type LiveOffer } from "./live.js";
 /** Seconds between "Fetched!" and the charge, while the app shows Undo. */
 export const UNDO_SECONDS = 5;
 
+/**
+ * Hackathon demo: PayPal charges go to our sandbox merchant, and no order is placed with the real store.
+ * Every purchase says so, and the app shows "Demo store · sandbox" from these fields.
+ */
+export const MERCHANT_OF_RECORD = "Fetch It demo store (PayPal sandbox)";
+export const RETAILER_ORDER_STATUS = "simulated";
+
 export type PurchaseStatus =
   | "blocked" // rules said no; nothing charged
   | "needs_approval" // waiting for the user's fingerprint
@@ -35,6 +42,15 @@ interface Place extends ShippingAddress {
 
 export interface PurchaseDoc {
   status: PurchaseStatus;
+  /** Who takes the money: always our sandbox demo store. */
+  merchantOfRecord: string;
+  /** The real store Channel3 found the offer at (its domain, e.g. "wayfair.com"). */
+  retailer: string;
+  /** No real order is placed with the retailer in the demo. */
+  retailerOrderStatus: typeof RETAILER_ORDER_STATUS;
+  /** "user" from the app, "watch" when a price watch hit its target. */
+  source: "user" | "watch";
+  watchId: string | null;
   decision: Decision;
   reasons: Reason[];
   productId: string;
@@ -84,6 +100,11 @@ function logActivity(tx: Transaction, uid: string, purchaseId: string, p: Partia
     reasons: p.reasons ?? [],
     title: p.title ?? null,
     merchant: p.merchant ?? null,
+    retailer: p.retailer ?? p.merchant ?? null,
+    merchantOfRecord: p.merchantOfRecord ?? MERCHANT_OF_RECORD,
+    retailerOrderStatus: p.retailerOrderStatus ?? RETAILER_ORDER_STATUS,
+    source: p.source ?? "user",
+    watchId: p.watchId ?? null,
     price: p.price ?? null,
     currency: p.currency ?? null,
     imageUrl: p.imageUrl ?? null,
@@ -113,16 +134,21 @@ async function readContext(tx: Transaction, uid: string, placeId: string) {
     rules: rulesSnap.data() as HouseRules,
     place,
     knownStores: storesSnap.docs.map((d) => d.data().merchant as string),
-    monthToDate: (spendSnap.data()?.total as number | undefined) ?? 0,
+    monthToDate: ((spendSnap.data()?.totalCents as number | undefined) ?? 0) / 100,
     vaultId: (vaultSnap.data()?.paypalVaultId as string | undefined) ?? null,
   };
 }
 
 const spendRef = (uid: string, month: string) => userDoc(uid).collection("spend").doc(month);
+/** Spend is kept in integer cents: Firestore float increments drift (212.98000000000002). */
 const reserve = (tx: Transaction, uid: string, month: string, amount: number, currency: string) =>
-  tx.set(spendRef(uid, month), { total: FieldValue.increment(amount), currency, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  tx.set(
+    spendRef(uid, month),
+    { totalCents: FieldValue.increment(Math.round(amount * 100)), currency, updatedAt: FieldValue.serverTimestamp() },
+    { merge: true },
+  );
 
-function clients() {
+export function clients() {
   return {
     c3: (uid: string) => new Channel3(CHANNEL3_API_KEY.value(), uid),
     paypal: () => new PayPal(PAYPAL_BASE_URL, PAYPAL_CLIENT_ID.value(), PAYPAL_CLIENT_SECRET.value()),
@@ -181,7 +207,7 @@ async function charge(uid: string, ref: DocumentReference, from: "pending_undo" 
   return { ...p, ...outcome } as PurchaseDoc;
 }
 
-function verifyOffer(offerId: unknown, uid: string): OfferClaim {
+export function verifyOffer(offerId: unknown, uid: string): OfferClaim {
   try {
     const claim = verify<OfferClaim>(FETCH_SIGNING_KEY.value(), offerId);
     if (claim.kind !== "offer" || claim.uid !== uid) throw new InvalidToken("wrong token");
@@ -201,6 +227,10 @@ const response = (id: string, p: PurchaseDoc) => ({
   reasons: p.reasons,
   title: p.title,
   merchant: p.merchant,
+  retailer: p.retailer,
+  merchantOfRecord: p.merchantOfRecord,
+  retailerOrderStatus: p.retailerOrderStatus,
+  imageUrl: p.imageUrl,
   price: p.price,
   currency: p.currency,
   size: p.size,
@@ -210,11 +240,96 @@ const response = (id: string, p: PurchaseDoc) => ({
 });
 export type PurchaseResponse = ReturnType<typeof response>;
 
-const secrets = [CHANNEL3_API_KEY, FETCH_SIGNING_KEY, PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET];
-const requireUid = (uid: string | undefined) => {
+export const secrets = [CHANNEL3_API_KEY, FETCH_SIGNING_KEY, PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET];
+export const requireUid = (uid: string | undefined) => {
   if (!uid) throw new HttpsError("unauthenticated", "Sign in first.");
   return uid;
 };
+
+/**
+ * The whole purchase path, shared by the app (purchaseOffer) and price watches: live price → rules →
+ * record → (auto-buy) undo window → charge. `onDecision` fires as soon as the decision is recorded.
+ */
+export async function startPurchase(
+  uid: string,
+  claim: Pick<OfferClaim, "productId" | "merchant" | "color" | "title" | "imageUrl">,
+  opts: {
+    placeId: string;
+    size?: string | null;
+    source: "user" | "watch";
+    watchId?: string;
+    onDecision?: (r: PurchaseResponse) => unknown;
+  },
+): Promise<PurchaseResponse> {
+  const live: LiveOffer = await fetchLiveOffer(clients().c3(uid), claim);
+  const ref = userDoc(uid).collection("purchases").doc();
+
+  const p = await db.runTransaction(async (tx) => {
+    const ctx = await readContext(tx, uid, opts.placeId);
+    const { decision, reasons } = decide({
+      rules: ctx.rules,
+      monthToDate: ctx.monthToDate,
+      offer: live,
+      size: opts.size ?? null,
+      place: ctx.place ? { id: opts.placeId, label: ctx.place.label } : null,
+      knownStores: ctx.knownStores,
+      paymentLinked: !!ctx.vaultId,
+    });
+    const status: PurchaseStatus = decision === "AUTO_BUY" ? "pending_undo" : decision === "NEEDS_APPROVAL" ? "needs_approval" : "blocked";
+    const doc: PurchaseDoc = {
+      status,
+      decision,
+      reasons,
+      productId: live.productId,
+      merchant: live.merchant,
+      title: live.title,
+      imageUrl: live.imageUrl,
+      url: live.url,
+      color: claim.color,
+      merchantOfRecord: MERCHANT_OF_RECORD,
+      retailer: live.merchant,
+      retailerOrderStatus: RETAILER_ORDER_STATUS,
+      source: opts.source,
+      watchId: opts.watchId ?? null,
+      size: opts.size ?? null,
+      price: live.price,
+      currency: live.currency,
+      categoryPath: live.categoryPath,
+      placeId: opts.placeId,
+      placeLabel: ctx.place?.label ?? null,
+      shipTo: ctx.place ? toAddress(ctx.place) : null,
+      spendMonth: decision === "AUTO_BUY" ? ctx.month : null,
+      undoUntil: decision === "AUTO_BUY" ? Timestamp.fromMillis(Date.now() + UNDO_SECONDS * 1000) : null,
+      paypalOrderId: null,
+      paypalCaptureId: null,
+      error: null,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    };
+    tx.set(ref, doc);
+    if (decision === "AUTO_BUY") reserve(tx, uid, ctx.month, live.price!, live.currency);
+    logActivity(tx, uid, ref.id, doc);
+    return doc;
+  });
+
+  logger.info("purchase decision", { uid, purchaseId: ref.id, source: opts.source, decision: p.decision, price: p.price });
+  await opts.onDecision?.(response(ref.id, p));
+
+  if (p.status === "needs_approval") {
+    // TODO(FCM): push "Needs your OK" to the user's devices.
+    logger.info("FCM placeholder: Needs your OK", {
+      uid,
+      purchaseId: ref.id,
+      title: `${p.title} · ${money(p.price ?? 0, p.currency)}`,
+      body: p.reasons.filter((r) => !r.pass).map((r) => r.message).join(" · "),
+    });
+    return response(ref.id, p);
+  }
+  if (p.status !== "pending_undo") return response(ref.id, p);
+
+  await new Promise((r) => setTimeout(r, Math.max(0, p.undoUntil!.toMillis() - Date.now())));
+  return response(ref.id, await charge(uid, ref, "pending_undo"));
+}
 
 /**
  * Buy an offer from fetchItem. Streams the decision immediately (so the app can show Undo), then for an
@@ -228,70 +343,7 @@ export const purchaseOffer = onCall<{ offerId: string; size?: string; placeId: s
     if (typeof placeId !== "string" || !placeId) throw new HttpsError("invalid-argument", "placeId is required.");
     if (size !== undefined && typeof size !== "string") throw new HttpsError("invalid-argument", "size must be a string.");
     const claim = verifyOffer(offerId, uid);
-
-    const live: LiveOffer = await fetchLiveOffer(clients().c3(uid), claim);
-    const ref = userDoc(uid).collection("purchases").doc();
-
-    const p = await db.runTransaction(async (tx) => {
-      const ctx = await readContext(tx, uid, placeId);
-      const { decision, reasons } = decide({
-        rules: ctx.rules,
-        monthToDate: ctx.monthToDate,
-        offer: live,
-        size: size ?? null,
-        place: ctx.place ? { id: placeId, label: ctx.place.label } : null,
-        knownStores: ctx.knownStores,
-        paymentLinked: !!ctx.vaultId,
-      });
-      const status: PurchaseStatus = decision === "AUTO_BUY" ? "pending_undo" : decision === "NEEDS_APPROVAL" ? "needs_approval" : "blocked";
-      const doc: PurchaseDoc = {
-        status,
-        decision,
-        reasons,
-        productId: live.productId,
-        merchant: live.merchant,
-        title: live.title,
-        imageUrl: live.imageUrl,
-        url: live.url,
-        color: claim.color,
-        size: size ?? null,
-        price: live.price,
-        currency: live.currency,
-        categoryPath: live.categoryPath,
-        placeId,
-        placeLabel: ctx.place?.label ?? null,
-        shipTo: ctx.place ? toAddress(ctx.place) : null,
-        spendMonth: decision === "AUTO_BUY" ? ctx.month : null,
-        undoUntil: decision === "AUTO_BUY" ? Timestamp.fromMillis(Date.now() + UNDO_SECONDS * 1000) : null,
-        paypalOrderId: null,
-        paypalCaptureId: null,
-        error: null,
-        createdAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-      };
-      tx.set(ref, doc);
-      if (decision === "AUTO_BUY") reserve(tx, uid, ctx.month, live.price!, live.currency);
-      logActivity(tx, uid, ref.id, doc);
-      return doc;
-    });
-
-    logger.info("purchaseOffer decision", { uid, purchaseId: ref.id, decision: p.decision, price: p.price });
-    await res?.sendChunk(response(ref.id, p));
-
-    if (p.status === "needs_approval") {
-      // TODO(FCM): push "Needs your OK" to the user's devices.
-      logger.info("FCM placeholder: Needs your OK", {
-        uid,
-        purchaseId: ref.id,
-        title: `${p.title} · ${money(p.price ?? 0, p.currency)}`,
-        body: p.reasons.filter((r) => !r.pass).map((r) => r.message).join(" · "),
-      });
-      return response(ref.id, p);
-    }
-    if (p.status !== "pending_undo") return response(ref.id, p);
-
-    await new Promise((r) => setTimeout(r, Math.max(0, p.undoUntil!.toMillis() - Date.now())));
-    return response(ref.id, await charge(uid, ref, "pending_undo"));
+    return startPurchase(uid, claim, { placeId, size, source: "user", onDecision: (r) => res?.sendChunk(r) });
   },
 );
 

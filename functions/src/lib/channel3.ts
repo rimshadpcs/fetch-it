@@ -33,6 +33,8 @@ export interface C3Category {
 export interface C3Product {
   id: string;
   title: string;
+  gender?: "male" | "female" | "unisex" | null;
+  age?: string | null;
   brands?: { id: string; name: string }[];
   images?: { url: string; cleaned_url: string | null; is_main_image: boolean }[];
   category: C3Category | null;
@@ -49,6 +51,11 @@ export interface C3SearchResponse {
 export interface C3Filters {
   /** Age-agnostic products count as adult. */
   age?: string[];
+  /** Category slug for /v1/search, e.g. "table-lamps". */
+  category?: string;
+  /** Category slugs for /v1/similar (which rejects `category`); a parent slug includes its children. */
+  category_ids?: string[];
+  price?: { min_price?: number; max_price?: number };
   /** Strict: "male" returns only male-tagged products (unisex and untagged are dropped). */
   gender?: "male" | "female";
 }
@@ -89,6 +96,30 @@ export class Channel3 {
       limit,
       filters: withDefaults(filters),
     });
+  }
+
+  /** Nearest neighbours of a catalog product ("More like this" / "Find cheaper"). Same filters as search. */
+  similar(productId: string, filters: C3Filters = {}, limit = 10) {
+    return this.call<C3SearchResponse>("/v1/similar", { product_id: productId, limit, filters: withDefaults(filters) });
+  }
+
+  // Price tracking (v0). Response shapes checked against the live API (the guide says `price_history`;
+  // the API returns `history`).
+  startTracking(productId: string) {
+    return this.call<{ canonical_product_id: string; subscription_status: string; created_at: string }>(
+      "/v0/price-tracking/start",
+      { canonical_product_id: productId },
+    );
+  }
+
+  stopTracking(productId: string) {
+    return this.call<unknown>("/v0/price-tracking/stop", { canonical_product_id: productId });
+  }
+
+  priceHistory(productId: string) {
+    return this.call<{ canonical_product_id: string; history: { timestamp: string; price: number; currency: string }[] }>(
+      `/v0/price-tracking/history/${encodeURIComponent(productId)}`,
+    );
   }
 
   /**

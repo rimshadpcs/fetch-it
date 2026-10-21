@@ -94,30 +94,7 @@ export async function runFetch(
   };
   const c3 = new Channel3(channel3Key, userId);
 
-  // Product detail is free but Channel3 serves parallel calls slowly (5 at once ≈ 1.5 s vs 0.35 s for one),
-  // so we start likely winners early and reuse the promise.
-  const detailCache = new Map<string, Promise<C3Product | null>>();
-  const detail = (id: string, options: Record<string, string> = {}) => {
-    const key = `${id}|${JSON.stringify(options)}`;
-    if (!detailCache.has(key)) detailCache.set(key, c3.product(id, options).catch(() => null));
-    return detailCache.get(key)!;
-  };
-  /**
-   * Detail in the colour that matches the photo. Search results already list the colour options, so we can
-   * usually ask for the right colour in one call; a prefetched default-colour detail is reused when it matches.
-   */
-  const detailInColor = async (p: C3Product, wanted: string[]) => {
-    const option = colorOptionOf(p.variants);
-    const color = chooseColor(p.variants, wanted);
-    const plainKey = `${p.id}|{}`;
-    if (!option || !color) return detail(p.id);
-    if (detailCache.has(plainKey)) {
-      const plain = await detailCache.get(plainKey)!;
-      const selected = plain?.variants?.selected.find((s) => s.name === option.name)?.label;
-      if (plain && selected === color) return plain;
-    }
-    return detail(p.id, { [option.name]: color });
-  };
+  const hydrator = new OfferHydrator(c3);
 
   const img = await timed("resize", () => prepareImage(image));
 
@@ -146,7 +123,7 @@ export async function runFetch(
   };
   const imageSearch = timed("image_search", () => c3.imageSearch(crop, filters)).then((r) => {
     // Image search usually lands before text search; warm details for its top hits meanwhile.
-    r.products.slice(0, DETAIL_COUNT).forEach((p) => void detail(p.id));
+    r.products.slice(0, DETAIL_COUNT).forEach((p) => hydrator.prefetch(p.id));
     emit({
       type: "image_matches",
       previews: r.products.slice(0, 8).map((p) => ({
@@ -167,26 +144,67 @@ export async function runFetch(
     ["text", filterByCategory(textRes.products, target)],
   ]);
 
-  const offers: RankedOffer[] = [];
-  let dropped = 0;
-  await timed("product_detail", async () => {
+  const { offers, dropped } = await timed("product_detail", () => hydrator.hydrate(candidates, item.colors));
+  timings.offers_dropped = dropped;
+  emit({ type: "offers", offers });
+
+  timings.total = Math.round(performance.now() - start);
+  return { status: "results", items, itemIndex: index, model, offers, timings };
+}
+
+/**
+ * Turns ranked candidates into offers with live detail prices: detail in the colour that matches, drop
+ * listings with nothing buyable in that colour, one backfill wave. Shared by fetchItem and findSimilar.
+ */
+export class OfferHydrator {
+  // Product detail is free but Channel3 serves parallel calls slowly (5 at once ≈ 1.5 s vs 0.35 s for one),
+  // so callers can start likely winners early; promises are cached and reused.
+  private cache = new Map<string, Promise<C3Product | null>>();
+  constructor(private c3: Channel3) {}
+
+  private detail(id: string, options: Record<string, string> = {}) {
+    const key = `${id}|${JSON.stringify(options)}`;
+    if (!this.cache.has(key)) this.cache.set(key, this.c3.product(id, options).catch(() => null));
+    return this.cache.get(key)!;
+  }
+
+  prefetch(id: string) {
+    void this.detail(id);
+  }
+
+  /**
+   * Detail in the colour that matches the photo. Search results already list the colour options, so we can
+   * usually ask for the right colour in one call; a prefetched default-colour detail is reused when it matches.
+   */
+  private async detailInColor(p: C3Product, wanted: string[]) {
+    const option = colorOptionOf(p.variants);
+    const color = chooseColor(p.variants, wanted);
+    const plainKey = `${p.id}|{}`;
+    if (!option || !color) return this.detail(p.id);
+    if (this.cache.has(plainKey)) {
+      const plain = await this.cache.get(plainKey)!;
+      const selected = plain?.variants?.selected.find((s) => s.name === option.name)?.label;
+      if (plain && selected === color) return plain;
+    }
+    return this.detail(p.id, { [option.name]: color });
+  }
+
+  async hydrate(candidates: Candidate[], wantedColors: string[], count = DETAIL_COUNT) {
+    const offers: RankedOffer[] = [];
+    let dropped = 0;
     let next = 0;
-    for (let wave = 0; wave < MAX_WAVES && offers.length < DETAIL_COUNT && next < candidates.length; wave++) {
-      const batch = candidates.slice(next, next + DETAIL_COUNT - offers.length);
+    for (let wave = 0; wave < MAX_WAVES && offers.length < count && next < candidates.length; wave++) {
+      const batch = candidates.slice(next, next + count - offers.length);
       next += batch.length;
-      const details = await Promise.all(batch.map((c) => detailInColor(c.product, item.colors)));
+      const details = await Promise.all(batch.map((c) => this.detailInColor(c.product, wantedColors)));
       batch.forEach((c, i) => {
         const offer = details[i] && toOffer(c, details[i]);
         if (offer) offers.push(offer);
         else dropped++;
       });
     }
-  });
-  timings.offers_dropped = dropped;
-  emit({ type: "offers", offers });
-
-  timings.total = Math.round(performance.now() - start);
-  return { status: "results", items, itemIndex: index, model, offers, timings };
+    return { offers, dropped };
+  }
 }
 
 /** Cheapest in-stock offer, preferring the store we matched on. */

@@ -5,6 +5,8 @@
 //   3. earbuds (electronics) → BLOCKED, nothing charged
 //   4. lamp again → AUTO_BUY → undoPurchase inside the window → nothing charged
 //   5. tampered / foreign tokens are rejected
+//   6. watch the lamp with a target above its price → checkWatchesNow → Price dropped → rules → auto-buy
+//   7. findSimilar: "More like this" and "Find cheaper" for the lamp
 // Run with emulators up: node test/purchase.mjs   (local emulators only; charges go to the PayPal sandbox)
 import { readFile } from "node:fs/promises";
 import { config } from "dotenv";
@@ -42,6 +44,7 @@ await user.collection("settings").doc("rules").set({
 });
 await user.collection("places").doc("home").set({
   label: "Home",
+  isDefault: true,
   fullName: "Fetch Buyer",
   line1: "2211 N First St",
   city: "San Jose",
@@ -93,6 +96,7 @@ const offerToken = (productId, merchant, title) =>
 const show = (r) => {
   console.log(`${at()}  → ${r.decision} / ${r.status}: ${r.title} — ${r.price === null ? "no price" : `$${r.price}`} @ ${r.merchant}`);
   for (const x of r.reasons) console.log(`          ${x.pass ? "✓" : x.onFail === "block" ? "✗" : "?"} ${x.message}`);
+  if (r.retailer) console.log(`          retailer ${r.retailer} · merchant of record: ${r.merchantOfRecord} · retailer order: ${r.retailerOrderStatus}`);
   if (r.paypalOrderId) console.log(`          PayPal sandbox order ${r.paypalOrderId}`);
   if (r.error) console.log(`          error: ${r.error}`);
 };
@@ -142,20 +146,46 @@ console.log("   unsaved placeId →", (await call("purchaseOffer", { offerId: go
 const tiny = "/9j/4AAQSkZJRgABAQ"; // any bytes: the token is checked before the image is used
 console.log("   forged itemsToken →", (await call("fetchItem", { imageBase64: tiny, itemsToken: "e30.AAAA", itemIndex: 0 })).error?.message);
 
+// ---------- 6. price watch ----------
+console.log(`\n${at()}  6) Watch the lamp at $50 (it's ~$42 now), then run a check`);
+const watch = await call("watchOffer", { offerId: offerToken("LtIyk1j", "wayfair.com", "Glass Mushroom Table Lamp"), targetPrice: 50 });
+console.log(`${at()}  watchOffer →`, JSON.stringify(watch));
+const check = await call("checkWatchesNow", {});
+for (const c of check.results ?? []) {
+  console.log(`${at()}  checked "${c.title}": $${c.price} vs target $${c.targetPrice} → ${c.triggered ? "TRIGGERED" : "waiting"}`);
+  if (c.purchase) show(c.purchase);
+  if (c.purchase?.paypalOrderId) orders.push(c.purchase.paypalOrderId);
+}
+const w = (await user.collection("watches").doc(watch.watchId).get()).data();
+console.log(`          watch now: ${w.status}, purchase ${w.purchaseId} (${w.purchaseStatus}), Channel3 tracking: ${w.channel3Tracking}`);
+const again = await call("checkWatchesNow", {});
+console.log(`${at()}  second check: ${again.results.length} active watches (triggered watches aren't bought twice)`);
+
+// ---------- 7. find similar ----------
+console.log(`\n${at()}  7) findSimilar for the lamp`);
+const lampOffer = offerToken("LtIyk1j", "wayfair.com", "Glass Mushroom Table Lamp");
+for (const [label, data] of [["More like this", { offerId: lampOffer }], ["Find cheaper", { offerId: lampOffer, maxPrice: 41.99 }]]) {
+  const r = await call("findSimilar", data);
+  if (r.error) { console.log("   ", label, "error:", r.error.message); continue; }
+  console.log(`   ${label}: source $${r.source.price} @ ${r.source.merchant} · category ${r.category} · ${r.offers.length} offers in ${r.timingMs} ms`);
+  for (const o of r.offers) console.log(`      $${o.price} ${o.title.slice(0, 55)} @ ${o.merchant} [${o.category}]${o.offerId ? "" : " (no offerId!)"}`);
+}
+
 // ---------- results ----------
 console.log("\n=== users/scout-test/activity (oldest first) ===");
 const acts = await user.collection("activity").orderBy("createdAt").get();
 for (const d of acts.docs) {
   const a = d.data();
   console.log(
-    `${a.createdAt.toDate().toISOString().slice(11, 23)}  ${a.status.padEnd(14)} ${String(a.title).slice(0, 34).padEnd(34)} $${String(a.price).padEnd(7)} ${a.summary}` +
+    `${a.createdAt.toDate().toISOString().slice(11, 23)}  ${(a.type === "watch" ? "watch:" : "") + a.status}`.padEnd(30) + ` ${String(a.title).slice(0, 30).padEnd(30)} $${String(a.price).padEnd(7)} ${a.summary}` +
       `${a.paypalOrderId ? `  [PayPal ${a.paypalOrderId}]` : ""}` +
+      `${a.type === "purchase" ? `\n${" ".repeat(14)}retailer ${a.retailer} · ${a.merchantOfRecord} · retailer order ${a.retailerOrderStatus} · source ${a.source}` : ""}` +
       `${a.reasons?.some((r) => !r.pass) ? `\n${" ".repeat(14)}reasons: ${a.reasons.filter((r) => !r.pass).map((r) => r.message).join("; ")}` : ""}` +
       `${a.imageUrl ? `\n${" ".repeat(14)}image: ${a.imageUrl.slice(0, 80)}` : ""}`,
   );
 }
 const month = new Date().toISOString().slice(0, 7);
-console.log(`\nmonth-to-date spend (${month}):`, (await user.collection("spend").doc(month).get()).data()?.total);
+console.log(`\nmonth-to-date spend (${month}): $${(await user.collection("spend").doc(month).get()).data()?.totalCents / 100}`);
 console.log("known stores:", (await user.collection("stores").get()).docs.map((d) => d.id).join(", "));
 
 // ---------- confirm with PayPal ----------
