@@ -88,7 +88,13 @@ KMP app ──Firebase Auth──▶ Cloud Functions (TypeScript)
 | `findSimilar` ✅ | `{offerId, maxPrice?}`: "More like this" / "Find cheaper" via Channel3 `/v1/similar`, signed offers |
 | `setRules` | update house rules (reads come straight from Firestore) |
 | `setProfile` | sizes, addresses, dog name |
-| `paypalLinkStart` · `paypalLinkComplete` | first-time PayPal approval + vault |
+| `startPayPalLink` ✅ | onboarding: Vault v3 setup token → approval URL; returns to `fetchit://paypal/return` / `…/cancel` |
+| `completePayPalLink` ✅ | `{token}` (setup token id): vault it, store token in `vault/{uid}` only, suggest PayPal's shipping address as Home, `users/{uid}.paypalLinked = true`. Nothing charged |
+| `confirmPlace` ✅ | `{placeId}`: user confirms a suggested place (suggested places don't count as saved until then) |
+| `advanceOrders` ✅ | scheduled every minute: demo orders placed → confirmed (30 s) → shipped (2 min, PayPal tracking) → delivered (promised date) |
+| `cancelOrder` ✅ | `{orderId}` before shipping: refund the sandbox capture, `cancelled`, roll back month-to-date spend |
+| `sweepStuckPurchases` ✅ | every 5 min: purchases stuck > 2 min in pending_undo/approved/charging → charge (idempotent) or fail |
+| `advanceOrder` · `runMaintenance` 🐞 | debug only (emulator or `ALLOW_DEBUG=true`): fast-forward an order; run both sweeps now |
 | `paypalWebhook` | verify signature, update activity |
 
 Activity is written by Functions and read by the app directly from Firestore.
@@ -116,6 +122,15 @@ postalCode, countryCode) · `stores/{merchant}` · `spend/{YYYY-MM}` {total} · 
 PayPal vault token lives in top-level **`vault/{uid}`**, which clients can't read (rules test covers it).
 Spend is stored as integer `totalCents` (float increments drift). The watches collection-group query needs
 the field override in `firestore.indexes.json`.
+
+**Simulated fulfilment** (`functions/src/fulfillment.ts`): after a successful capture, the completion transaction
+creates `users/{uid}/orders/{purchaseId}` (`simulated: true`, `retailerOrderId: DEMO-12345`, items, `totalCents`,
+shipTo, `promisedDeliveryDate`, PayPal order + capture ids, `statusHistory`). Timings from params
+`FULFILLMENT_CONFIRM_AFTER_SECONDS` (30), `FULFILLMENT_SHIP_AFTER_SECONDS` (120), `FULFILLMENT_DELIVERY_DAYS` (3).
+"Shipped" uses carrier `OTHER` + `carrier_name_other: "Fetch It Demo Post"` and a `DEMO…` tracking number, pushed
+to PayPal with `POST /v2/checkout/orders/{id}/track {capture_id, tracking_number, carrier, carrier_name_other,
+notify_payer: false}` (tracker id = `{captureId}-{trackingNumber}`). Cancel = `POST /v2/payments/captures/{id}/refund`
+with `PayPal-Request-Id: refund-{orderId}`. Every status change writes an `order` activity entry.
 
 **Demo store:** charges go to our PayPal sandbox merchant and no order is placed with the real store. Every
 purchase and purchase activity entry carries `merchantOfRecord: "Fetch It demo store (PayPal sandbox)"`,
@@ -313,6 +328,28 @@ Bottom nav: Fetch · Activity · Rules + round "+" (upload).
         store) on a schedule instead, which also gives the store-specific price.
       - `/v1/similar` rejects `filters.category`; it takes `category_ids` (slugs; a parent includes children),
         plus age/gender/price like search.
+- [x] Fulfilment, PayPal link, stuck-purchase cleanup (Oct 21, emulators + sandbox; `test/fulfillment.mjs`,
+      `test/link.mjs start|complete`):
+      - Lamp → PayPal `28S19710ME514191T` → demo order DEMO-21546 placed → confirmed → shipped (PayPal tracker
+        `92625043FP593035T-DEMO110525153915609`, status SHIPPED) → delivered. Cancel after delivery refused.
+      - Lamp again (`3M441463WS211122Y`) → confirmed → cancelOrder → refund `30W93440AD447982R` COMPLETED $41.99,
+        capture REFUNDED, purchase `refunded`, month-to-date $83.98 → $41.99. Second cancel refused.
+      - Stuck pending_undo purchase + two cleanup runs at once → one skipped, one completed: 1 charge attempt,
+        1 PayPal order (`5SF357644H892950W`, reference_id = purchase id), 1 demo order. Third run finds nothing.
+      - Fresh user link: setup token approved as fetchBuyer → completePayPalLink → linked, Home suggested from
+        PayPal shipping (2211 N First St, San Jose, CA 95131), no vault token in the response, nothing charged.
+        Replaying the approval or completing it as another user is refused.
+      Learned:
+      - **Vault v3 setup tokens work for PayPal wallets** (`POST /v3/vault/setup-tokens` with
+        `payment_source.paypal {usage_type: MERCHANT, customer_type: CONSUMER, usage_pattern, experience_context
+        {return_url, cancel_url, shipping_preference: GET_FROM_FILE, vault_instruction: ON_CREATE_PAYMENT_TOKENS}}`
+        → `rel: approve` link; then `POST /v3/vault/payment-tokens {payment_source: {token: {id, type: SETUP_TOKEN}}}`
+        → `id` (= vault_id) + `payment_source.paypal.{email_address, shipping.address, address}`). No charge needed.
+        Custom-scheme return URLs (`fetchit://…`) are accepted.
+      - On desktop the approval ends on PayPal's "sending you back" spinner because nothing opens `fetchit://`;
+        the setup token is already APPROVED by then.
+      - Re-linking the same PayPal account returns the **same** vault id (permit_multiple_payment_tokens: false).
+      - Order and payment-token specs: github.com/paypal/paypal-rest-api-specifications (openapi/*.json).
 - [ ] Deploy: enable Secret Manager API on fetchit-437a0 and set GEMINI_API_KEY, CHANNEL3_API_KEY,
       PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, FETCH_SIGNING_KEY (`firebase functions:secrets:set`)
 - [ ] FCM for "Needs your OK" (placeholder logs today) · PayPal link flow functions · webhooks · refunds

@@ -129,4 +129,126 @@ export class PayPal {
     const capture = json.purchase_units?.[0]?.payments?.captures?.[0];
     return { orderId: json.id, status: json.status ?? "UNKNOWN", captureId: capture?.id ?? null, captureStatus: capture?.status ?? null };
   }
+
+  /** Authenticated JSON call; throws PayPalError with PayPal's issue + debug id on failure. */
+  private async request<T>(method: string, path: string, body?: unknown, requestId?: string): Promise<T> {
+    const res = await fetch(`${this.baseUrl}${path}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${await this.token()}`,
+        "Content-Type": "application/json",
+        Prefer: "return=representation",
+        ...(requestId && { "PayPal-Request-Id": requestId }),
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: AbortSignal.timeout(20_000),
+    });
+    const text = await res.text();
+    const json = (text ? JSON.parse(text) : {}) as T & {
+      debug_id?: string;
+      message?: string;
+      details?: { issue?: string; description?: string }[];
+    };
+    if (!res.ok) {
+      const issue = json.details?.[0]?.issue ?? null;
+      throw new PayPalError(
+        `PayPal ${res.status} ${method} ${path.split("?")[0]}: ${issue ?? json.message ?? "failed"} ${json.details?.[0]?.description ?? ""}`.trim(),
+        res.status,
+        json.debug_id ?? null,
+        issue,
+      );
+    }
+    return json;
+  }
+
+  /**
+   * Vault a PayPal wallet without charging anything (Payment Method Tokens v3 setup token). The payer approves
+   * at the `approve` link; then call createPaymentToken. Return/cancel can be app deep links (fetchit://…).
+   */
+  createSetupToken(opts: { requestId: string; returnUrl: string; cancelUrl: string }) {
+    return this.request<{ id: string; status: string; links: { rel: string; href: string }[] }>(
+      "POST",
+      "/v3/vault/setup-tokens",
+      {
+        payment_source: {
+          paypal: {
+            description: "Fetch It pays for things you approve, within your house rules",
+            usage_type: "MERCHANT",
+            customer_type: "CONSUMER",
+            usage_pattern: "UNSCHEDULED_PREPAID",
+            permit_multiple_payment_tokens: false,
+            experience_context: {
+              brand_name: "Fetch It",
+              return_url: opts.returnUrl,
+              cancel_url: opts.cancelUrl,
+              // Ask PayPal for the buyer's shipping address so we can suggest it as "Home".
+              shipping_preference: "GET_FROM_FILE",
+              vault_instruction: "ON_CREATE_PAYMENT_TOKENS",
+            },
+          },
+        },
+      },
+      opts.requestId,
+    );
+  }
+
+  getSetupToken(id: string) {
+    return this.request<{ id: string; status: string }>("GET", `/v3/vault/setup-tokens/${encodeURIComponent(id)}`);
+  }
+
+  /** Exchange an approved setup token for the reusable payment token (the vault id used as `vault_id`). */
+  createPaymentToken(setupTokenId: string, requestId: string) {
+    return this.request<{
+      id: string;
+      customer?: { id: string };
+      payment_source?: {
+        paypal?: {
+          email_address?: string;
+          payer_id?: string;
+          name?: { given_name?: string; surname?: string; full_name?: string };
+          shipping?: { name?: { full_name?: string }; address?: PayPalAddress };
+          address?: PayPalAddress;
+        };
+      };
+    }>("POST", "/v3/vault/payment-tokens", { payment_source: { token: { id: setupTokenId, type: "SETUP_TOKEN" } } }, requestId);
+  }
+
+  /** Orders v2 add-tracking. `carrier` is one of PayPal's carrier codes; "OTHER" needs `carrierNameOther`. */
+  addTracking(orderId: string, t: { captureId: string; trackingNumber: string; carrier: string; carrierNameOther?: string; notifyPayer: boolean; requestId: string }) {
+    return this.request<{ id: string; status: string; purchase_units?: { shipping?: { trackers?: { id: string; status: string }[] } }[] }>(
+      "POST",
+      `/v2/checkout/orders/${encodeURIComponent(orderId)}/track`,
+      {
+        capture_id: t.captureId,
+        tracking_number: t.trackingNumber,
+        carrier: t.carrier,
+        ...(t.carrierNameOther && { carrier_name_other: t.carrierNameOther }),
+        notify_payer: t.notifyPayer,
+      },
+      t.requestId,
+    );
+  }
+
+  /** Full refund of a capture (omit amount). `requestId` makes a retried cancel refund once. */
+  refundCapture(captureId: string, opts: { requestId: string; note: string }) {
+    return this.request<{ id: string; status: string; amount?: { value: string; currency_code: string } }>(
+      "POST",
+      `/v2/payments/captures/${encodeURIComponent(captureId)}/refund`,
+      { note_to_payer: opts.note.slice(0, 255) },
+      opts.requestId,
+    );
+  }
+
+  getOrder(orderId: string) {
+    return this.request<Record<string, unknown>>("GET", `/v2/checkout/orders/${encodeURIComponent(orderId)}`);
+  }
+}
+
+export interface PayPalAddress {
+  address_line_1?: string;
+  address_line_2?: string;
+  admin_area_2?: string;
+  admin_area_1?: string;
+  postal_code?: string;
+  country_code: string;
 }

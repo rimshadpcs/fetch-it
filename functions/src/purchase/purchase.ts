@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions";
 import { FieldValue, Timestamp, type DocumentReference, type Transaction } from "firebase-admin/firestore";
@@ -14,6 +15,7 @@ import { PayPal, PayPalError, type ShippingAddress } from "../lib/paypal.js";
 import { InvalidToken, verify, type OfferClaim } from "../lib/sign.js";
 import { decide, money, type Decision, type HouseRules, type Reason } from "../rules.js";
 import { fetchLiveOffer, type LiveOffer } from "./live.js";
+import { placeDemoOrder } from "../fulfillment.js";
 
 /** Seconds between "Fetched!" and the charge, while the app shows Undo. */
 export const UNDO_SECONDS = 5;
@@ -34,7 +36,8 @@ export type PurchaseStatus =
   | "approved" // user approved; about to charge
   | "charging"
   | "completed"
-  | "failed"; // PayPal declined or errored; nothing charged
+  | "failed" // PayPal declined or errored; nothing charged
+  | "refunded"; // order cancelled before shipping; capture refunded
 
 interface Place extends ShippingAddress {
   label: string;
@@ -73,6 +76,12 @@ export interface PurchaseDoc {
   paypalOrderId: string | null;
   paypalCaptureId: string | null;
   error: string | null;
+  /** Which charge attempt owns the `charging` state (normal path or stuck-purchase cleanup). */
+  chargeAttempt?: string | null;
+  chargeStartedAt?: Timestamp | FieldValue | null;
+  chargeAttempts?: number | FieldValue;
+  /** Set when the stuck-purchase cleanup finished this purchase. */
+  recoveredBy?: string | null;
   createdAt: FieldValue | Timestamp;
   updatedAt: FieldValue | Timestamp;
 }
@@ -87,6 +96,7 @@ const SUMMARY: Record<PurchaseStatus, string> = {
   charging: "Paying with PayPal.",
   completed: "Fetched! Paid with PayPal.",
   failed: "Payment didn't go through. Nothing charged.",
+  refunded: "Cancelled and refunded.",
 };
 
 /** One Activity entry per decision or event, so the log reads as a history. */
@@ -112,6 +122,7 @@ function logActivity(tx: Transaction, uid: string, purchaseId: string, p: Partia
     placeLabel: p.placeLabel ?? null,
     paypalOrderId: p.paypalOrderId ?? null,
     error: p.error ?? null,
+    ...(p.recoveredBy && { recoveredBy: p.recoveredBy }),
     createdAt: FieldValue.serverTimestamp(),
   });
 }
@@ -128,7 +139,8 @@ async function readContext(tx: Transaction, uid: string, placeId: string) {
     tx.get(db.collection("vault").doc(uid)),
   ]);
   if (!rulesSnap.exists) throw new HttpsError("failed-precondition", "Set your house rules first.");
-  const place = placeSnap.exists ? (placeSnap.data() as Place) : null;
+  // A place PayPal only suggested (link flow) isn't saved until the user confirms it.
+  const place = placeSnap.exists && !placeSnap.data()?.suggested ? (placeSnap.data() as Place) : null;
   return {
     month,
     rules: rulesSnap.data() as HouseRules,
@@ -155,20 +167,37 @@ export function clients() {
   };
 }
 
+/** Who may move a purchase into `charging`. */
+export type ClaimRule = (p: PurchaseDoc, now: number) => boolean;
+export const claimIf =
+  (status: PurchaseStatus): ClaimRule =>
+  (p) =>
+    p.status === status;
+
 /**
- * Move a purchase from `from` to charging, charge the vault, record the result. Returns the final status.
- * The status check and the flip to `charging` happen in one transaction, so Undo can't race the charge.
+ * Claim a purchase (status check + flip to `charging` + attempt id, in one transaction), charge the vault,
+ * record the result. Only the attempt that holds the claim may write the outcome, and the completion
+ * transaction creates the demo order, so a purchase is charged and fulfilled at most once even when the
+ * normal path and the stuck-purchase cleanup overlap. PayPal-Request-Id = purchase id backs this up: a
+ * retried charge returns the same PayPal order instead of a new one.
  */
-async function charge(uid: string, ref: DocumentReference, from: "pending_undo" | "approved"): Promise<PurchaseDoc> {
+export async function charge(uid: string, ref: DocumentReference, canClaim: ClaimRule, recoveredBy: string | null = null): Promise<PurchaseDoc> {
+  const attempt = randomUUID();
   const start = await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     const p = snap.data() as PurchaseDoc;
     const vault = await tx.get(db.collection("vault").doc(uid));
-    if (p.status !== from) return { p, vaultId: null };
-    tx.update(ref, { status: "charging", updatedAt: FieldValue.serverTimestamp() });
-    return { p: { ...p, status: "charging" as const }, vaultId: (vault.data()?.paypalVaultId as string) ?? null };
+    if (!p || !canClaim(p, Date.now())) return { p, vaultId: null, claimed: false };
+    tx.update(ref, {
+      status: "charging",
+      chargeAttempt: attempt,
+      chargeStartedAt: FieldValue.serverTimestamp(),
+      chargeAttempts: FieldValue.increment(1),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    return { p: { ...p, status: "charging" as const }, vaultId: (vault.data()?.paypalVaultId as string) ?? null, claimed: true };
   });
-  if (start.p.status !== "charging") return start.p; // undone / declined meanwhile
+  if (!start.claimed) return start.p; // undone / declined / someone else is charging it
 
   const p = start.p;
   let outcome: Partial<PurchaseDoc> & { status: PurchaseStatus };
@@ -182,7 +211,7 @@ async function charge(uid: string, ref: DocumentReference, from: "pending_undo" 
         vaultId: start.vaultId,
         amount: p.price!,
         currency: p.currency,
-        description: `${p.title} (${p.merchant})`,
+        description: `${p.title} (${p.merchant}) · Fetch It demo store`,
         shipTo: p.shipTo,
       });
     outcome =
@@ -194,17 +223,23 @@ async function charge(uid: string, ref: DocumentReference, from: "pending_undo" 
     logger.error("charge failed", { uid, purchaseId: ref.id, message: err.message, debugId: err.debugId });
     outcome = { status: "failed", error: err.message };
   }
+  if (recoveredBy) outcome.recoveredBy = recoveredBy;
 
-  await db.runTransaction(async (tx) => {
+  return db.runTransaction(async (tx) => {
+    const cur = (await tx.get(ref)).data() as PurchaseDoc;
+    if (cur.status !== "charging" || cur.chargeAttempt !== attempt) return cur; // another attempt owns it now
+    const order = outcome.status === "completed" ? await tx.get(userDoc(uid).collection("orders").doc(ref.id)) : null;
     tx.update(ref, { ...outcome, updatedAt: FieldValue.serverTimestamp() });
+    const done = { ...p, ...outcome } as PurchaseDoc;
     if (outcome.status === "completed") {
       tx.set(userDoc(uid).collection("stores").doc(p.merchant), { merchant: p.merchant, lastPurchaseAt: FieldValue.serverTimestamp() }, { merge: true });
     } else if (p.spendMonth) {
       reserve(tx, uid, p.spendMonth, -p.price!, p.currency); // release the reservation
     }
-    logActivity(tx, uid, ref.id, { ...p, ...outcome });
+    logActivity(tx, uid, ref.id, done);
+    if (order && !order.exists) placeDemoOrder(tx, uid, ref.id, done);
+    return done;
   });
-  return { ...p, ...outcome } as PurchaseDoc;
 }
 
 export function verifyOffer(offerId: unknown, uid: string): OfferClaim {
@@ -328,7 +363,7 @@ export async function startPurchase(
   if (p.status !== "pending_undo") return response(ref.id, p);
 
   await new Promise((r) => setTimeout(r, Math.max(0, p.undoUntil!.toMillis() - Date.now())));
-  return response(ref.id, await charge(uid, ref, "pending_undo"));
+  return response(ref.id, await charge(uid, ref, claimIf("pending_undo")));
 }
 
 /**
@@ -410,7 +445,7 @@ export const approvePurchase = onCall<{ purchaseId: string }, Promise<PurchaseRe
     });
 
     if (p.status !== "approved") return response(ref.id, p);
-    return response(ref.id, await charge(uid, ref, "approved"));
+    return response(ref.id, await charge(uid, ref, claimIf("approved")));
   },
 );
 
