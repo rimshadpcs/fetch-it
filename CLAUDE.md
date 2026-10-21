@@ -196,7 +196,16 @@ Bottom nav: Fetch · Activity · Rules + round "+" (upload).
       - Send `x-user-id` (Firebase uid) so buy links/commissions are attributed per user.
       - Category filter: Gemini's free-text category ≠ Channel3 slugs, so targets = slugs whose name shares a word
         with Gemini's item_type/category + slugs that dominate the text-search top 10.
-      - [ ] Not yet tested with clothing (sizes path) — needs an unbranded clothing photo in `functions/fixtures/`.
+      - Clothing (brown oversized hoodie, `fixtures/hoodie.jpg`, kept out of git): 5.7 s uncached, 3.9 s cached.
+        Gemini picked the hoodie over the cap/trousers in the frame. All 5 offers in `hoodies-3`; 4/5 had
+        per-size stock (e.g. Gap XS–XXXL InStock), colours came back as named options (Truffle, palomino brown…).
+        Image-search and text-search hits didn't overlap, so ranking interleaves the two lists.
+      - **Sizes depend on the selected colour.** Detail returns the default colour's matrix: talentless.co's default
+        "Coco" (brown, the matching colour) has every size `exists: false`, while `?option_Color=Cement` gives
+        M–XXL InStock. Size labels vary by store (S/M/L vs SML/MED/LRG).
+      - Next: pick the colour matching Gemini's `colors` and re-fetch detail with `option_Color=<label>`; treat an
+        offer whose chosen colour has no existing size as unavailable instead of returning an empty size list;
+        normalize size labels before matching the user's saved sizes.
 - [x] Spike 2: approve PayPal once with vault, then charge again server-side with no redirect
       (`server/spikes/spike2.mjs`). Learned:
       - Requires **Save payment methods** enabled on the sandbox app, else checkout shows "Something went wrong" after login.
