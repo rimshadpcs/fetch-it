@@ -1,5 +1,5 @@
 import type { C3Product } from "../lib/channel3.js";
-import type { IdentifiedItem } from "../lib/gemini.js";
+import type { DetectedItem } from "../lib/gemini.js";
 
 export type Source = "image" | "text";
 
@@ -20,21 +20,42 @@ const words = (s: string) =>
     .filter((w) => w.length >= 3 && !STOP.has(w))
     .map((w) => w.replace(/(es|s)$/, ""));
 
+const parentOf = (c: C3Product["category"]) => c?.path.at(-2)?.slug ?? null;
+function dominant(products: C3Product[]): Map<string, C3Product["category"]> {
+  const counts = new Map<string, { n: number; cat: C3Product["category"] }>();
+  for (const p of products.slice(0, 10)) {
+    if (!p.category) continue;
+    const e = counts.get(p.category.slug) ?? { n: 0, cat: p.category };
+    e.n++;
+    counts.set(p.category.slug, e);
+  }
+  return new Map([...counts].filter(([, e]) => e.n >= 2).map(([slug, e]) => [slug, e.cat]));
+}
+
 /**
  * Gemini gives free-text categories; Channel3 uses slugs ("table-lamps", "sweatshirts-3").
- * Target slugs = categories whose name shares a word with what Gemini saw, plus the categories
- * that dominate the text search (which Gemini's query drove, so it stays on-topic).
+ * Target slugs =
+ *  - categories whose name shares a word with what Gemini saw;
+ *  - categories that dominate the text search (Gemini's query drove it, so it stays on-topic);
+ *  - categories that dominate the image search *and* are siblings of those (same parent): Gemini may say
+ *    "trousers" for joggers (pants > joggers-4 vs pants > trousers-3), while a fleece's look-alike jackets
+ *    (outerwear > coats-jackets vs shirts-tops > sweatshirts-3) stay out.
  */
-export function targetCategories(item: IdentifiedItem, text: C3Product[], image: C3Product[]): Set<string> {
+export function targetCategories(item: DetectedItem, text: C3Product[], image: C3Product[]): Set<string> {
   const itemWords = new Set(words(`${item.item_type} ${item.category}`));
   const target = new Set<string>();
+  const parents = new Set<string>();
+  const add = (c: NonNullable<C3Product["category"]>) => {
+    target.add(c.slug);
+    const parent = parentOf(c);
+    if (parent) parents.add(parent);
+  };
   for (const p of [...text, ...image]) {
     const c = p.category;
-    if (c && words(`${c.title} ${c.slug}`).some((w) => itemWords.has(w))) target.add(c.slug);
+    if (c && words(`${c.title} ${c.slug}`).some((w) => itemWords.has(w))) add(c);
   }
-  const counts = new Map<string, number>();
-  for (const p of text.slice(0, 10)) if (p.category) counts.set(p.category.slug, (counts.get(p.category.slug) ?? 0) + 1);
-  for (const [slug, n] of counts) if (n >= 2) target.add(slug);
+  for (const cat of dominant(text).values()) if (cat) add(cat);
+  for (const [slug, cat] of dominant(image)) if (parents.has(parentOf(cat) ?? "")) target.add(slug);
   return target;
 }
 

@@ -46,6 +46,16 @@ export interface C3SearchResponse {
   next_page_token: string | null;
 }
 
+export interface C3Filters {
+  /** Age-agnostic products count as adult. */
+  age?: string[];
+  /** Strict: "male" returns only male-tagged products (unisex and untagged are dropped). */
+  gender?: "male" | "female";
+}
+
+/** Passing any filters replaces Channel3's defaults (new + InStock), so we always restate them. */
+const withDefaults = (f: C3Filters) => ({ availability: ["InStock", "LimitedAvailability"], conditions: ["new"], ...f });
+
 export class Channel3 {
   constructor(
     private apiKey: string,
@@ -69,17 +79,26 @@ export class Channel3 {
   }
 
   // limit 10: ~1.1 s and steady; limit 20 swings 1.4–3.6 s. We only show the top 5.
-  textSearch(query: string, limit = 10) {
-    return this.call<C3SearchResponse>("/v1/search", { query, limit });
+  textSearch(query: string, filters: C3Filters = {}, limit = 10) {
+    return this.call<C3SearchResponse>("/v1/search", { query, limit, filters: withDefaults(filters) });
   }
 
-  imageSearch(jpeg: Buffer, limit = 10) {
-    return this.call<C3SearchResponse>("/v1/image-search", { base64_image: jpeg.toString("base64"), limit });
+  imageSearch(jpeg: Buffer, filters: C3Filters = {}, limit = 10) {
+    return this.call<C3SearchResponse>("/v1/image-search", {
+      base64_image: jpeg.toString("base64"),
+      limit,
+      filters: withDefaults(filters),
+    });
   }
 
-  /** Free. The only source of real prices and per-size stock. */
-  product(id: string) {
-    return this.call<C3Product>(`/v1/products/${encodeURIComponent(id)}`, undefined, 5000);
+  /**
+   * Free. The only source of real prices and per-size stock. `options` selects a variant, e.g. {Color: "Coco"}
+   * → `?option_Color=Coco`; sizes, price and images then describe that colour.
+   */
+  product(id: string, options: Record<string, string> = {}) {
+    const qs = new URLSearchParams(Object.entries(options).map(([name, label]) => [`option_${name}`, label]));
+    const query = qs.size ? `?${qs}` : "";
+    return this.call<C3Product>(`/v1/products/${encodeURIComponent(id)}${query}`, undefined, 5000);
   }
 }
 

@@ -77,7 +77,7 @@ KMP app ──Firebase Auth──▶ Cloud Functions (TypeScript)
 | Function | Purpose |
 |---|---|
 | `health` | liveness check (onRequest) |
-| `fetchItem` ✅ | photo → identified item + top 5 offers with live price, sizes, stock (callable, streams) |
+| `fetchItem` ✅ | photo → items in it ("Which one?") → top 5 offers for one item with live price, colour, sizes, stock (callable, streams) |
 | `agentTurn` | user message/voice text + context → agent reply, picks, actions |
 | `purchase` | buy an offer: rules check → auto-buy (with undo window) or approval request (FCM) |
 | `approvePurchase` | user approved (after biometric on device) |
@@ -203,9 +203,33 @@ Bottom nav: Fetch · Activity · Rules + round "+" (upload).
       - **Sizes depend on the selected colour.** Detail returns the default colour's matrix: talentless.co's default
         "Coco" (brown, the matching colour) has every size `exists: false`, while `?option_Color=Cement` gives
         M–XXL InStock. Size labels vary by store (S/M/L vs SML/MED/LRG).
-      - Next: pick the colour matching Gemini's `colors` and re-fetch detail with `option_Color=<label>`; treat an
-        offer whose chosen colour has no existing size as unavailable instead of returning an empty size list;
-        normalize size labels before matching the user's saved sizes.
+- [x] fetchItem v2: real-world photos (people, busy backgrounds, several items, screenshots).
+      **API:** `{imageBase64, itemIndex?, items?}` →
+      `status: "choose"` (several items: show "Which one?", then call again with `itemIndex` + the `items` it
+      returned, which skips Gemini) · `"results"` (one item, or the chosen one) · `"none"`.
+      Stream events: `items` → `image_matches` → `offers`. The photo is only held in memory for the request;
+      only a padded crop of the chosen item goes to Channel3.
+      - Gemini returns **all** items (max 6, most prominent first) with `box_2d` [ymin,xmin,ymax,xmax] on 0–1000
+        → returned as 0–1 `{x,y,width,height}`; boxes checked visually and are tight. Auto-continue only when
+        there's exactly one item. Also returns `age` + `gender` → Channel3 `filters.age` / `filters.gender`
+        (gender only for clear men's/women's: Channel3's `male` filter drops unisex/untagged products).
+      - Crop = box + 10% padding, ≤768 px. Image search now waits for identify (it needs the box), so
+        critical path = identify + max(image, text search) + detail.
+      - Colour: `chooseColor` maps Gemini's colours to store names via a colour-family table (brown → Coco,
+        Truffle, palomino brown; literal word wins ties), then detail is fetched with `?option_Color=<label>`.
+        Offers whose chosen colour has no existing / buyable size are dropped and backfilled (one extra wave).
+      - Sizes normalized for matching saved sizes: SML→S, MED→M, X-Large→XL, 2XL→XXL, "XS 2-4"→XS,
+        plus sizes stay 1X/2X/3X, "US 10"→10, "7 1/4"→7.25; kids' "1½-2Y" → null. "Size Type" (Petite/Tall)
+        is not the size option.
+      - Category filter also keeps image-search categories that are siblings of the target ones
+        (pants > joggers-4 next to pants > trousers-3), so a vague "pants" still returns joggers.
+      - Emulator results (Oct 21): lamp → 1 item, auto results, 6.2 s (identify 2.5, text 2.2, detail 1.5).
+        hoodie photo → 3–6 items (hoodie, cap, sweatpants; sometimes T-shirt hem, plant, desk) in 3.0–4.1 s;
+        each chosen item then 1.7–5.3 s. Hoodie: brown oversized hoodies with colour + sizes (Coffee Brown,
+        XS–2XL). Cap: dad/trucker caps (the cap's logo pulled Diesel look-alikes once). Pants: joggers/sweatpants
+        3 of 5 after the sibling-category fix (was 1 of 5 + $1,595 wool trousers).
+      - Known gaps: >6 s when Gemini or Channel3 has a slow moment; Gemini still says "pants"/"trousers" for
+        sweatpants; no screenshot fixture tested yet.
 - [x] Spike 2: approve PayPal once with vault, then charge again server-side with no redirect
       (`server/spikes/spike2.mjs`). Learned:
       - Requires **Save payment methods** enabled on the sandbox app, else checkout shows "Something went wrong" after login.
