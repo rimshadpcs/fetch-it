@@ -219,8 +219,8 @@ export async function charge(uid: string, ref: DocumentReference, canClaim: Clai
         ? { status: "completed", paypalOrderId: result.orderId, paypalCaptureId: result.captureId, error: null }
         : { status: "failed", paypalOrderId: result.orderId, error: `PayPal order ${result.status}` };
   } catch (e) {
-    const err = e as PayPalError;
-    logger.error("charge failed", { uid, purchaseId: ref.id, message: err.message, debugId: err.debugId });
+    const err = e as Error;
+    logger.error("charge failed", { uid, purchaseId: ref.id, ...(e instanceof PayPalError ? e.toLog() : { message: err.message }) });
     outcome = { status: "failed", error: err.message };
   }
   if (recoveredBy) outcome.recoveredBy = recoveredBy;

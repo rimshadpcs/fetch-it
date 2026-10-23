@@ -13,6 +13,8 @@ import { PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET } from "./config.js";
 import { db, userDoc } from "./lib/db.js";
 import type { ShippingAddress } from "./lib/paypal.js";
 import { money } from "./rules.js";
+import { PayPalError } from "./lib/paypal.js";
+import { paypalFailure } from "./lib/paypalErrors.js";
 import { clients, MERCHANT_OF_RECORD, RETAILER_ORDER_STATUS, requireUid, type PurchaseDoc } from "./purchase/purchase.js";
 
 // Timings, overridable per environment (functions/.env or .env.local).
@@ -186,7 +188,7 @@ async function syncTracking(uid: string, ref: DocumentReference, o: OrderDoc): P
     const tracker = res.purchase_units?.[0]?.shipping?.trackers?.find((t) => t.id.includes(o.trackingNumber!)) ?? res.purchase_units?.[0]?.shipping?.trackers?.[0];
     tracking = { status: "added", trackerId: tracker?.id ?? null, error: null };
   } catch (e) {
-    logger.error("PayPal add tracking failed", { uid, orderId: ref.id, message: (e as Error).message });
+    logger.error("PayPal add tracking failed", { uid, orderId: ref.id, ...(e instanceof PayPalError ? e.toLog() : { message: (e as Error).message }) });
     tracking = { status: "failed", error: (e as Error).message };
   }
   await ref.update({ paypalTracking: tracking, updatedAt: FieldValue.serverTimestamp() });
@@ -298,6 +300,8 @@ export const cancelOrder = onCall<{ orderId: string }>({ secrets: fulfilmentSecr
         createdAt: FieldValue.serverTimestamp(),
       });
     });
+    const mapped = paypalFailure(e, "cancelOrder", { uid, orderId: ref.id });
+    if (mapped instanceof HttpsError) throw mapped;
     logger.error("cancelOrder refund failed", { uid, orderId: ref.id, message: (e as Error).message });
     throw new HttpsError("unavailable", "Couldn't cancel right now. Try again.");
   }

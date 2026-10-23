@@ -8,6 +8,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET } from "./config.js";
 import { db, userDoc } from "./lib/db.js";
 import { PayPalError, type PayPalAddress } from "./lib/paypal.js";
+import { paypalFailure } from "./lib/paypalErrors.js";
 import { clients, requireUid } from "./purchase/purchase.js";
 
 const RETURN_URL = "fetchit://paypal/return";
@@ -22,7 +23,10 @@ export const startPayPalLink = onCall({ secrets, cors: true }, async (request) =
   const uid = requireUid(request.auth?.uid);
   const token = await clients()
     .paypal()
-    .createSetupToken({ requestId: `link-${uid}-${Date.now()}`, returnUrl: RETURN_URL, cancelUrl: CANCEL_URL });
+    .createSetupToken({ requestId: `link-${uid}-${Date.now()}`, returnUrl: RETURN_URL, cancelUrl: CANCEL_URL })
+    .catch((e) => {
+      throw paypalFailure(e, "startPayPalLink", { uid });
+    });
   const approvalUrl = token.links.find((l) => l.rel === "approve")?.href;
   if (!approvalUrl) throw new HttpsError("internal", "PayPal didn't return an approval link.");
   await linkRef(token.id).set({ uid, status: "started", createdAt: FieldValue.serverTimestamp() });
@@ -59,11 +63,10 @@ export const completePayPalLink = onCall<{ token: string }>({ secrets, cors: tru
   try {
     pt = await paypal.createPaymentToken(setupTokenId, `pt-${setupTokenId}`);
   } catch (e) {
-    const err = e as PayPalError;
-    logger.warn("createPaymentToken failed", { uid, setupTokenId, message: err.message, debugId: err.debugId });
+    if (e instanceof PayPalError) logger.warn("createPaymentToken failed", { uid, setupTokenId, ...e.toLog() });
     const status = await paypal.getSetupToken(setupTokenId).then((t) => t.status).catch(() => "unknown");
     if (status !== "APPROVED") throw new HttpsError("failed-precondition", `Approve Fetch It in PayPal first (status: ${status}).`);
-    throw new HttpsError("unavailable", "Couldn't link PayPal right now. Try again.");
+    throw paypalFailure(e, "completePayPalLink", { uid, setupTokenId });
   }
 
   const pp = pt.payment_source?.paypal ?? {};

@@ -17,16 +17,30 @@ export interface ChargeResult {
   captureStatus: string | null;
 }
 
+/**
+ * A failed PayPal call. Carries only what PayPal returns about the failure (never credentials or tokens):
+ * the error name (OAuth `error` like "invalid_client", or REST `name` like "UNPROCESSABLE_ENTITY"),
+ * the first `issue`, the HTTP status and the `debug_id` PayPal support asks for.
+ */
 export class PayPalError extends Error {
   constructor(
     message: string,
     readonly status: number,
     readonly debugId: string | null,
     readonly issue: string | null,
+    readonly paypalName: string | null = null,
   ) {
     super(message);
+    this.name = "PayPalError";
+  }
+
+  /** Safe to log: no request bodies, no credentials. */
+  toLog() {
+    return { paypalError: this.paypalName, issue: this.issue, status: this.status, debugId: this.debugId, message: this.message };
   }
 }
+
+const debugIdOf = (res: Response, body?: { debug_id?: string }) => body?.debug_id ?? res.headers.get("paypal-debug-id");
 
 let cached: { key: string; token: string; expiresAt: number } | null = null;
 
@@ -50,8 +64,17 @@ export class PayPal {
       body: "grant_type=client_credentials",
       signal: AbortSignal.timeout(10_000),
     });
-    const json = (await res.json()) as { access_token?: string; expires_in?: number; error_description?: string };
-    if (!res.ok || !json.access_token) throw new PayPalError(`PayPal auth failed: ${json.error_description ?? res.status}`, res.status, null, null);
+    const json = (await res.json().catch(() => ({}))) as { access_token?: string; expires_in?: number; error?: string; error_description?: string };
+    if (!res.ok || !json.access_token) {
+      // e.g. 401 invalid_client "Client Authentication failed" = wrong client id/secret pair for this base URL.
+      throw new PayPalError(
+        `PayPal auth failed: ${json.error ?? res.status}${json.error_description ? ` (${json.error_description})` : ""}`,
+        res.status,
+        debugIdOf(res),
+        null,
+        json.error ?? "AUTHENTICATION_FAILURE",
+      );
+    }
     cached = { key, token: json.access_token, expiresAt: Date.now() + (json.expires_in ?? 0) * 1000 };
     return json.access_token;
   }
@@ -109,9 +132,10 @@ export class PayPal {
       }),
       signal: AbortSignal.timeout(20_000),
     });
-    const json = (await res.json()) as {
+    const json = (await res.json().catch(() => ({}))) as {
       id?: string;
       status?: string;
+      name?: string;
       debug_id?: string;
       message?: string;
       details?: { issue?: string; description?: string }[];
@@ -122,8 +146,9 @@ export class PayPal {
       throw new PayPalError(
         `PayPal ${res.status}: ${issue ?? json.message ?? "order failed"} ${json.details?.[0]?.description ?? ""}`.trim(),
         res.status,
-        json.debug_id ?? null,
+        debugIdOf(res, json),
         issue,
+        json.name ?? null,
       );
     }
     const capture = json.purchase_units?.[0]?.payments?.captures?.[0];
@@ -144,7 +169,14 @@ export class PayPal {
       signal: AbortSignal.timeout(20_000),
     });
     const text = await res.text();
-    const json = (text ? JSON.parse(text) : {}) as T & {
+    let parsed: unknown = {};
+    try {
+      parsed = text ? JSON.parse(text) : {};
+    } catch {
+      parsed = { message: `non-JSON response (${res.status})` };
+    }
+    const json = parsed as T & {
+      name?: string;
       debug_id?: string;
       message?: string;
       details?: { issue?: string; description?: string }[];
@@ -154,8 +186,9 @@ export class PayPal {
       throw new PayPalError(
         `PayPal ${res.status} ${method} ${path.split("?")[0]}: ${issue ?? json.message ?? "failed"} ${json.details?.[0]?.description ?? ""}`.trim(),
         res.status,
-        json.debug_id ?? null,
+        debugIdOf(res, json),
         issue,
+        json.name ?? null,
       );
     }
     return json;
