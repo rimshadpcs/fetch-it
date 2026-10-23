@@ -7,9 +7,40 @@ export type Source = "image" | "text" | "similar";
 export interface Candidate {
   product: C3Product;
   merchant: string;
+  /** Position-weighted relevance across sources (see relevance()). */
   score: number;
   sources: Set<Source>;
+  /** Best (0-based) position this listing reached in each result list. */
+  ranks: Partial<Record<Source, number>>;
   colorways: C3Product[];
+}
+
+/** Image similarity is the strongest signal of "this is the thing in the photo"; text matches are broader. */
+export const SOURCE_WEIGHT: Record<Source, number> = { image: 1, similar: 1, text: 0.6 };
+/** 1 for the top result, 0.5 at position 5, 0.31 at position 10. */
+const positional = (rank: number) => 1 / (1 + rank * 0.25);
+export const relevance = (ranks: Candidate["ranks"]) =>
+  (Object.entries(ranks) as [Source, number][]).reduce((sum, [src, rank]) => sum + SOURCE_WEIGHT[src] * positional(rank), 0);
+
+/** Median price of a result list (an anchor for "what this kind of thing costs", not a price we show). */
+export function medianPrice(products: C3Product[]): number | null {
+  const prices = products
+    .map((p) => p.offers[0]?.price?.price)
+    .filter((n): n is number => typeof n === "number" && n > 0)
+    .sort((a, b) => a - b);
+  if (!prices.length) return null;
+  const mid = Math.floor(prices.length / 2);
+  return prices.length % 2 ? prices[mid] : (prices[mid - 1] + prices[mid]) / 2;
+}
+
+/**
+ * Price sanity: 1 inside ½×–2× the median of the visual matches; outside, shrinks with distance in
+ * doublings (0.5 at 4× or ¼×) down to a floor of 0.35, so extreme outliers sink but never disappear.
+ */
+export function priceFactor(price: number, median: number | null): number {
+  if (!median || !(price > 0)) return 1;
+  const doublings = Math.abs(Math.log2(price / median));
+  return doublings <= 1 ? 1 : Math.max(0.35, 1 / doublings);
 }
 
 const STOP = new Set(["and", "the", "with", "for", "vintage", "style", "home", "apparel", "accessories"]);
@@ -69,8 +100,9 @@ export const normalizeTitle = (t: string) =>
 const merchantOf = (p: C3Product) => p.offers[0]?.domain ?? "unknown";
 
 /**
- * Reciprocal-rank fusion over both result lists (items found by both rise), deduped by product id
- * and by normalized title + merchant. Same title at the same store = colourways of one listing.
+ * Merge result lists into one ranked list: position-weighted relevance with image above text (items found
+ * by both rise), deduped by product id and by normalized title + merchant (same title at one store =
+ * colourways of one listing). Price sanity is applied later, once live prices are known.
  */
 export function mergeAndDedupe(lists: [Source, C3Product[]][]): Candidate[] {
   const byId = new Map<string, Candidate>();
@@ -80,13 +112,14 @@ export function mergeAndDedupe(lists: [Source, C3Product[]][]): Candidate[] {
       const titleKey = `${normalizeTitle(p.title)}|${merchantOf(p)}`;
       let c = byId.get(p.id) ?? byTitle.get(titleKey);
       if (!c) {
-        c = { product: p, merchant: merchantOf(p), score: 0, sources: new Set(), colorways: [] };
+        c = { product: p, merchant: merchantOf(p), score: 0, sources: new Set(), ranks: {}, colorways: [] };
         byTitle.set(titleKey, c);
       } else if (c.product.id !== p.id && !c.colorways.some((x) => x.id === p.id)) {
         c.colorways.push(p);
       }
       byId.set(p.id, c);
-      c.score += 1 / (60 + rank);
+      c.ranks[source] = Math.min(c.ranks[source] ?? Infinity, rank);
+      c.score = relevance(c.ranks);
       c.sources.add(source);
     });
   }

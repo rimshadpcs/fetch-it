@@ -16,6 +16,7 @@ import { InvalidToken, verify, type OfferClaim } from "../lib/sign.js";
 import { decide, money, type Decision, type HouseRules, type Reason } from "../rules.js";
 import { fetchLiveOffer, type LiveOffer } from "./live.js";
 import { placeDemoOrder } from "../fulfillment.js";
+import { DEMO_MIN_INSTANCES } from "../options.js";
 
 /** Seconds between "Fetched!" and the charge, while the app shows Undo. */
 export const UNDO_SECONDS = 5;
@@ -371,7 +372,7 @@ export async function startPurchase(
  * auto-buy waits out the undo window and charges; the final result carries the PayPal order id.
  */
 export const purchaseOffer = onCall<{ offerId: string; size?: string; placeId: string }, Promise<PurchaseResponse>, PurchaseResponse>(
-  { secrets, timeoutSeconds: 60, cors: true },
+  { secrets, timeoutSeconds: 60, cors: true, minInstances: DEMO_MIN_INSTANCES },
   async (request, res) => {
     const uid = requireUid(request.auth?.uid);
     const { offerId, size, placeId } = request.data ?? {};

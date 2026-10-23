@@ -1,6 +1,7 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions";
-import { CHANNEL3_API_KEY, FETCH_SIGNING_KEY, GEMINI_API_KEY } from "../config.js";
+import { ANTHROPIC_API_KEY, CHANNEL3_API_KEY, FETCH_SIGNING_KEY, GEMINI_API_KEY } from "../config.js";
+import { DEMO_MIN_INSTANCES } from "../options.js";
 import type { DetectedItem } from "../lib/gemini.js";
 import { InvalidToken, sha256, sign, TOKEN_TTL_MS, verify, type ItemsClaim, type OfferClaim } from "../lib/sign.js";
 import { runFetch, type FetchEvent, type FetchResult, type RankedOffer } from "./pipeline.js";
@@ -49,10 +50,11 @@ export function signOffers(key: string, uid: string, offers: RankedOffer[]): Sig
  */
 export const fetchItem = onCall<FetchItemRequest, Promise<FetchItemResponse>, FetchEvent>(
   {
-    secrets: [GEMINI_API_KEY, CHANNEL3_API_KEY, FETCH_SIGNING_KEY],
+    secrets: [GEMINI_API_KEY, ANTHROPIC_API_KEY, CHANNEL3_API_KEY, FETCH_SIGNING_KEY],
     memory: "1GiB",
     timeoutSeconds: 60,
     cors: true,
+    minInstances: DEMO_MIN_INSTANCES,
   },
   async (request, response) => {
     const uid = request.auth?.uid;
@@ -89,6 +91,7 @@ export const fetchItem = onCall<FetchItemRequest, Promise<FetchItemResponse>, Fe
     try {
       result = await runFetch(image, {
         geminiKey: GEMINI_API_KEY.value(),
+        anthropicKey: ANTHROPIC_API_KEY.value() || undefined,
         channel3Key: CHANNEL3_API_KEY.value(),
         userId: uid,
         itemIndex,
@@ -107,6 +110,11 @@ export const fetchItem = onCall<FetchItemRequest, Promise<FetchItemResponse>, Fe
     logger.info("fetchItem", {
       uid,
       status: result.status,
+      // Which Gemini model answered, and every attempt (hedge / overload fallback / low-confidence escalation).
+      model: result.model,
+      identifyTrace: result.identifyTrace,
+      // True when Claude's (race) or the strong model's (low_confidence) answer was used instead of Flash-Lite's.
+      fallbackUsed: !!result.model && result.model !== "gemini-3.5-flash-lite",
       items: result.items.length,
       offers: result.status === "results" ? result.offers.length : 0,
       timings: result.timings,

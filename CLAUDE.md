@@ -68,8 +68,8 @@ KMP app ──Firebase Auth──▶ Cloud Functions (TypeScript)
   **Rules: clients may only read their own `users/{uid}` data; all writes go through Functions** (Admin SDK
   bypasses rules). Nothing else is readable.
 - **FCM** for approval notifications ("Needs your OK"). **App Check** later.
-- **AI:** Gemini via `@google/genai` on the server only. Identify uses `gemini-3.5-flash-lite` (minimal thinking);
-  see Status → Spike 1 / fetchItem for model notes.
+- **AI:** on the server only. Identify races Gemini `gemini-3.5-flash-lite` (minimal thinking, preferred) against
+  Claude `claude-haiku-5-5` (`@anthropic-ai/sdk`, strict tool use), both from t=0 — see Status → identify race.
 - **PayPal:** REST via fetch or the PayPal Agent Toolkit (check current npm package name in PayPal docs).
 - **Channel3:** REST API / official TS SDK (docs.trychannel3.com).
 
@@ -350,7 +350,41 @@ Bottom nav: Fetch · Activity · Rules + round "+" (upload).
         the setup token is already APPROVED by then.
       - Re-linking the same PayPal account returns the **same** vault id (permit_multiple_payment_tokens: false).
       - Order and payment-token specs: github.com/paypal/paypal-rest-api-specifications (openapi/*.json).
-- [ ] Deploy: enable Secret Manager API on fetchit-437a0 and set GEMINI_API_KEY, CHANNEL3_API_KEY,
-      PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, FETCH_SIGNING_KEY (`firebase functions:secrets:set`)
+- [x] **Backend live and tested in production** (fetchit-437a0, us-central1, Node 22, minInstances 0; see DEPLOY.md).
+      Oct 23 live run (`functions/test/live.mjs`, fresh email/password user): setRules → startPayPalLink (approved as
+      fetchBuyer) → completePayPalLink → confirmPlace → fetchItem(lamp) → purchaseOffer → approvePurchase → order
+      reached `confirmed` → second purchase → cancelOrder (refund) → activity. Client latencies: fetchItem 17.9 s
+      cold / 11.7 s warm (identify 10.5 s), purchaseOffer 5.6 s cold / 8.3 s warm (incl. 5 s undo), approvePurchase 7.0 s,
+      cancelOrder 8.2 s, the rest 3.9–7.8 s on first call. Channel3: 4 credits (2 per fetchItem; detail is free).
+      Scheduled functions run (advanceOrders every minute, sweepStuckPurchases 5 min, checkWatches hourly).
+      Learned:
+      - First deploy: one function hit `409 Could not create bucket gcf-v2-sources-…` (retried fine) and the
+        Artifact Registry cleanup policy had to be set separately.
+      - `setGlobalOptions` in index.ts ran after the other modules' functions were defined (ESM imports run first):
+        moved to `options.ts`, imported first.
+      - startPayPalLink → INTERNAL in prod was PayPal `401 invalid_client`: the client ID had been stored as
+        PAYPAL_CLIENT_SECRET. Fixed (v2), functions redeployed (they pin secret versions). PayPal errors now log and
+        return PayPal's error name, issue and debug_id.
+- [x] Ranking: relevance = position-weighted, image 1.0 × text 0.6 (both → higher); × price-sanity factor
+      (1 within ½–2× the median price of the visual matches, shrinking to 0.5 at 4×/¼×, floor 0.35 — outliers sink,
+      never dropped). 7 hydrated, best 5 returned, each with `score {final, relevance, imageRank, textRank,
+      priceFactor, medianPrice}`. Items carry `prominence`; clutter < 0.3 dropped; one clear subject (≥ 0.75 with the
+      runner-up ≤ 0.45) continues without "Which one?".
+- [x] Identify race (Oct 23). Benchmark (`functions/spikes/identify-bench.mjs`, lamp + flat-lay knit polo, 5 runs,
+      crops in `fixtures/out/crops/`):
+      | Model | Median | Worst | Errors | Items/run | Box vs Gemini | Channel3 top-5 vs Gemini |
+      |---|---|---|---|---|---|---|
+      | Gemini 3.5 Flash-Lite | 2.0–2.6 s | **10.9 s** | 0 | lamp 1–4 (unstable) | — | — |
+      | Gemini 3 Flash preview | 2.1–2.7 s | 5.3 s | **15 s timeout, 3× quota 429** | 4 | IoU 0.96 | 4–5/5 |
+      | Claude Haiku 5.5 | 2.1–3.1 s | 4.3 s | 0 | always the same | IoU 0.75–0.84: clips the lamp base, polo width varies 0.73–0.97 | 2–4/5, same #1 |
+      → `identify` (src/lib/identify.ts + race.ts): Flash-Lite and Claude start at t=0; Gemini accepted the moment it
+      answers, Claude only after a 3 s grace or once Gemini failed; if Claude fails (or no key), Gemini 3.6 Flash takes
+      the backup slot. 3 Flash preview dropped. Low confidence (< 0.6) → one 3.6 Flash re-ask. `npm test` covers the
+      race timing (9 tests; found and fixed an early-firing grace timer that would have stalled Claude to 15 s).
+      Same day Flash-Lite was in a 503 "high demand" outage (image calls hung 15 s): with the race every identify
+      finished at ~3.0 s (Claude); bad Claude key → 3.6 Flash at 3.0 s; no Claude key → 5.6 s; both keys bad → error in 0.7 s.
+- [ ] Deploy the race: set `ANTHROPIC_API_KEY` in Secret Manager first (fetchItem binds it), then
+      `deploy --only functions:fetchItem`, then `node functions/test/measure.mjs` for warm prod numbers
+      (targets: identify < 3 s, fetchItem < 5 s warm).
 - [ ] FCM for "Needs your OK" (placeholder logs today) · PayPal link flow functions · webhooks · refunds
 - [ ] App: onboarding → fetch → results → buy/approve → activity

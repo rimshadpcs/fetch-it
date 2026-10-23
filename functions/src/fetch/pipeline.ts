@@ -1,10 +1,18 @@
 import { Channel3, mainImage, type C3Filters, type C3Offer, type C3Product } from "../lib/channel3.js";
-import { identify, type DetectedItem } from "../lib/gemini.js";
+import type { AttemptTrace, DetectedItem } from "../lib/gemini.js";
+import { identify } from "../lib/identify.js";
 import { cropForSearch, prepareImage } from "../lib/image.js";
-import { filterByCategory, mergeAndDedupe, targetCategories, type Candidate } from "./rank.js";
+import { filterByCategory, medianPrice, mergeAndDedupe, priceFactor, targetCategories, type Candidate } from "./rank.js";
 import { buyableSizes, chooseColor, colorOptionOf, normalizeSize, sizeOptionOf } from "./variants.js";
 
 const DETAIL_COUNT = 5;
+/** Offers hydrated with live prices before the price-sanity re-rank; the best DETAIL_COUNT are returned. */
+const RANK_POOL = 7;
+/** Items below this prominence are background clutter, dropped when there's a real subject. */
+const CLUTTER = 0.3;
+/** Continue without "Which one?" when the top item is this prominent and the next one isn't. */
+const CLEAR_SUBJECT = 0.75;
+const RUNNER_UP_MAX = 0.45;
 /** Detail waves: the top 5, then one backfill wave for offers dropped as sold out in the matching colour. */
 const MAX_WAVES = 2;
 
@@ -47,6 +55,16 @@ export interface RankedOffer {
   colors: ColorOption[];
   matchedBy: string[];
   category: string | null;
+  /** Why it's ranked where it is: final = relevance × priceFactor. */
+  score: OfferScore;
+}
+export interface OfferScore {
+  final: number;
+  relevance: number;
+  imageRank: number | null;
+  textRank: number | null;
+  priceFactor: number;
+  medianPrice: number | null;
 }
 export interface Timings {
   [step: string]: number;
@@ -63,12 +81,35 @@ export type FetchEvent =
  * - `choose`: several items; show "Which one?" and call again with `itemIndex` and these `items`.
  * - `none`: nothing purchasable found.
  */
+interface Common {
+  items: DetectedItem[];
+  model: string | null;
+  /** Every Gemini call this request made (model, role, time, outcome); null when items came from a token. */
+  identifyTrace: AttemptTrace[] | null;
+  timings: Timings;
+}
 export type FetchResult =
-  | { status: "results"; items: DetectedItem[]; itemIndex: number; model: string | null; offers: RankedOffer[]; timings: Timings }
-  | { status: "choose" | "none"; items: DetectedItem[]; model: string | null; timings: Timings };
+  | (Common & { status: "results"; itemIndex: number; offers: RankedOffer[] })
+  | (Common & { status: "choose" | "none" });
+
+/**
+ * Most prominent first, background clutter dropped (unless it's all there is). Returns the index to search
+ * automatically, or null when the photo really has several candidates ("Which one?").
+ */
+export function selectSubjects(items: DetectedItem[]): { items: DetectedItem[]; auto: number | null } {
+  const sorted = [...items].sort((a, b) => (b.prominence ?? 0) - (a.prominence ?? 0));
+  const real = sorted.filter((i) => (i.prominence ?? 1) >= CLUTTER);
+  const kept = real.length ? real : sorted;
+  if (kept.length <= 1) return { items: kept, auto: kept.length ? 0 : null };
+  const [top, next] = kept;
+  const clear = (top.prominence ?? 0) >= CLEAR_SUBJECT && (next.prominence ?? 0) <= RUNNER_UP_MAX;
+  return { items: kept, auto: clear ? 0 : null };
+}
 
 interface Deps {
   geminiKey: string;
+  /** Claude Haiku 5.5 races Gemini in identify; without it Gemini runs alone. */
+  anthropicKey?: string;
   channel3Key: string;
   userId: string;
   /** Which of `items` to search. Required when the photo has several items. */
@@ -80,7 +121,7 @@ interface Deps {
 
 export async function runFetch(
   image: Buffer,
-  { geminiKey, channel3Key, userId, itemIndex, items: knownItems, emit = () => {} }: Deps,
+  { geminiKey, anthropicKey, channel3Key, userId, itemIndex, items: knownItems, emit = () => {} }: Deps,
 ): Promise<FetchResult> {
   const start = performance.now();
   const timings: Timings = {};
@@ -100,17 +141,22 @@ export async function runFetch(
 
   let items = knownItems;
   let model: string | null = null;
+  let identifyTrace: AttemptTrace[] | null = null;
+  let auto: number | null = null;
   if (!items) {
-    ({ items, model } = await timed("identify", () => identify(geminiKey, img.jpeg)));
+    const r = await timed("identify", () => identify({ gemini: geminiKey, anthropic: anthropicKey }, img.jpeg));
+    ({ items, auto } = selectSubjects(r.items));
+    model = r.model;
+    identifyTrace = r.trace;
     emit({ type: "items", items, model });
   }
   const done = (status: "choose" | "none"): FetchResult => {
     timings.total = Math.round(performance.now() - start);
-    return { status, items: items!, model, timings };
+    return { status, items: items!, model, identifyTrace, timings };
   };
   if (!items.length) return done("none");
-  if (itemIndex === undefined && items.length > 1) return done("choose");
-  const index = itemIndex ?? 0;
+  if (itemIndex === undefined && auto === null) return done("choose");
+  const index = itemIndex ?? auto ?? 0;
   const item = items[index];
   if (!item) throw new RangeError(`itemIndex ${index} is out of range (0-${items.length - 1})`);
 
@@ -144,12 +190,21 @@ export async function runFetch(
     ["text", filterByCategory(textRes.products, target)],
   ]);
 
-  const { offers, dropped } = await timed("product_detail", () => hydrator.hydrate(candidates, item.colors));
+  const { offers: pool, dropped } = await timed("product_detail", () => hydrator.hydrate(candidates, item.colors, RANK_POOL));
   timings.offers_dropped = dropped;
+  // Price sanity against what the visual matches cost (search prices as an anchor only; offers carry live prices).
+  const median = medianPrice(filterByCategory(imageRes.products, target));
+  const offers = pool
+    .map((o) => {
+      const factor = priceFactor(o.price, median);
+      return { ...o, score: { ...o.score, priceFactor: round(factor), medianPrice: median, final: round(o.score.relevance * factor) } };
+    })
+    .sort((a, b) => b.score.final - a.score.final)
+    .slice(0, DETAIL_COUNT);
   emit({ type: "offers", offers });
 
   timings.total = Math.round(performance.now() - start);
-  return { status: "results", items, itemIndex: index, model, offers, timings };
+  return { status: "results", items, itemIndex: index, model, identifyTrace, offers, timings };
 }
 
 /**
@@ -266,6 +321,16 @@ function toOffer(c: Candidate, detail: C3Product): RankedOffer | null {
     sizes,
     colors,
     matchedBy: [...c.sources],
+    score: {
+      final: round(c.score),
+      relevance: round(c.score),
+      imageRank: c.ranks.image ?? c.ranks.similar ?? null,
+      textRank: c.ranks.text ?? null,
+      priceFactor: 1,
+      medianPrice: null,
+    },
     category: detail.category?.slug ?? null,
   };
 }
+
+const round = (n: number) => Math.round(n * 1000) / 1000;
