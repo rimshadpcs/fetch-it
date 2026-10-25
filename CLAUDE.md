@@ -383,8 +383,15 @@ Bottom nav: Fetch · Activity · Rules + round "+" (upload).
       race timing (9 tests; found and fixed an early-firing grace timer that would have stalled Claude to 15 s).
       Same day Flash-Lite was in a 503 "high demand" outage (image calls hung 15 s): with the race every identify
       finished at ~3.0 s (Claude); bad Claude key → 3.6 Flash at 3.0 s; no Claude key → 5.6 s; both keys bad → error in 0.7 s.
-- [ ] Deploy the race: set `ANTHROPIC_API_KEY` in Secret Manager first (fetchItem binds it), then
-      `deploy --only functions:fetchItem`, then `node functions/test/measure.mjs` for warm prod numbers
-      (targets: identify < 3 s, fetchItem < 5 s warm).
+- [x] Race deployed (Oct 25, fetchItem rev 00003; ANTHROPIC_API_KEY v1 verified: matches .env.local, API 200).
+      `test/measure.mjs` on lamp in prod, 4 warm calls: **identify 1.3–1.7 s (median 1.64 s)**, **fetchItem server
+      2.2–3.0 s (median 2.78 s)**, client 2.9–3.9 s; cold start 9.1 s client / 4.0 s server. Flash-Lite won all 5
+      races (Claude cancelled each time). Image search 0.7–1.3 s, text 0.6–1.1 s, detail 0.15–0.2 s in prod.
+      Was: identify 10.5 s / fetchItem 11.7 s warm on Oct 23.
+      - Secret-setting lesson (twice): `secrets:set` "succeeded" in another project. Always check the output says
+        `projects/789368648104/…` (= fetchit-437a0), or verify with `functions:secrets:get … --project fetchit-437a0`.
+- [ ] Ranking: price-sanity anchor is the median of the visual matches ($792 for the lamp, skewed by vintage Murano
+      listings), so the $99 Brightech lamp — 2nd-highest relevance, top text match — drops to #5 (factor 0.35).
+      Try a lower anchor (median of image + text matches, or of the cheaper half).
 - [ ] FCM for "Needs your OK" (placeholder logs today) · PayPal link flow functions · webhooks · refunds
 - [ ] App: onboarding → fetch → results → buy/approve → activity
