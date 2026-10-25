@@ -2,12 +2,19 @@ import { Channel3, mainImage, type C3Filters, type C3Offer, type C3Product } fro
 import type { AttemptTrace, DetectedItem } from "../lib/gemini.js";
 import { identify } from "../lib/identify.js";
 import { cropForSearch, prepareImage } from "../lib/image.js";
-import { filterByCategory, medianPrice, mergeAndDedupe, priceFactor, targetCategories, type Candidate } from "./rank.js";
+import { anchorPrice, filterByCategory, mergeAndDedupe, priceFactor, targetCategories, type Candidate, type PriceAnchor } from "./rank.js";
 import { buyableSizes, chooseColor, colorOptionOf, normalizeSize, sizeOptionOf } from "./variants.js";
 
 const DETAIL_COUNT = 5;
 /** Offers hydrated with live prices before the price-sanity re-rank; the best DETAIL_COUNT are returned. */
 const RANK_POOL = 7;
+/**
+ * Which price the price-sanity factor compares against (see anchorPrice). Oct 25 comparison on the same pools:
+ * image_median ($885 lamp / $75 polo) and all_median ($675 / $75) let pricey vintage/designer look-alikes set the
+ * bar — the $99 lamp sank or vanished and the polo's best visual match ($22.90, relevance 1.0) fell to #3.
+ * cheaper_half ($99 / $33) kept the best match first in both and lifted the affordable look-alike to #2.
+ */
+export const PRICE_ANCHOR: PriceAnchor = "cheaper_half";
 /** Items below this prominence are background clutter, dropped when there's a real subject. */
 const CLUTTER = 0.3;
 /** Continue without "Which one?" when the top item is this prominent and the next one isn't. */
@@ -89,7 +96,12 @@ interface Common {
   timings: Timings;
 }
 export type FetchResult =
-  | (Common & { status: "results"; itemIndex: number; offers: RankedOffer[] })
+  | (Common & {
+      status: "results";
+      itemIndex: number;
+      offers: RankedOffer[];
+      debug?: { pool: RankedOffer[]; anchors: Record<string, number | null> };
+    })
   | (Common & { status: "choose" | "none" });
 
 /**
@@ -110,6 +122,8 @@ interface Deps {
   geminiKey: string;
   /** Claude Haiku 5.5 races Gemini in identify; without it Gemini runs alone. */
   anthropicKey?: string;
+  /** Tuning only: also return the pre-price pool and every anchor, so ranking variants can be compared offline. */
+  debugRank?: boolean;
   channel3Key: string;
   userId: string;
   /** Which of `items` to search. Required when the photo has several items. */
@@ -121,7 +135,7 @@ interface Deps {
 
 export async function runFetch(
   image: Buffer,
-  { geminiKey, anthropicKey, channel3Key, userId, itemIndex, items: knownItems, emit = () => {} }: Deps,
+  { geminiKey, anthropicKey, channel3Key, userId, itemIndex, items: knownItems, emit = () => {}, debugRank = false }: Deps,
 ): Promise<FetchResult> {
   const start = performance.now();
   const timings: Timings = {};
@@ -193,7 +207,8 @@ export async function runFetch(
   const { offers: pool, dropped } = await timed("product_detail", () => hydrator.hydrate(candidates, item.colors, RANK_POOL));
   timings.offers_dropped = dropped;
   // Price sanity against what the visual matches cost (search prices as an anchor only; offers carry live prices).
-  const median = medianPrice(filterByCategory(imageRes.products, target));
+  const anchorInputs = [filterByCategory(imageRes.products, target), filterByCategory(textRes.products, target)] as const;
+  const median = anchorPrice(...anchorInputs, PRICE_ANCHOR);
   const offers = pool
     .map((o) => {
       const factor = priceFactor(o.price, median);
@@ -204,7 +219,13 @@ export async function runFetch(
   emit({ type: "offers", offers });
 
   timings.total = Math.round(performance.now() - start);
-  return { status: "results", items, itemIndex: index, model, identifyTrace, offers, timings };
+  const debug = debugRank
+    ? {
+        pool,
+        anchors: Object.fromEntries((["image_median", "all_median", "cheaper_half"] as const).map((k) => [k, anchorPrice(...anchorInputs, k)])),
+      }
+    : undefined;
+  return { status: "results", items, itemIndex: index, model, identifyTrace, offers, timings, ...(debug && { debug }) };
 }
 
 /**

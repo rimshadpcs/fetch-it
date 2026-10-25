@@ -390,8 +390,13 @@ Bottom nav: Fetch · Activity · Rules + round "+" (upload).
       Was: identify 10.5 s / fetchItem 11.7 s warm on Oct 23.
       - Secret-setting lesson (twice): `secrets:set` "succeeded" in another project. Always check the output says
         `projects/789368648104/…` (= fetchit-437a0), or verify with `functions:secrets:get … --project fetchit-437a0`.
-- [ ] Ranking: price-sanity anchor is the median of the visual matches ($792 for the lamp, skewed by vintage Murano
-      listings), so the $99 Brightech lamp — 2nd-highest relevance, top text match — drops to #5 (factor 0.35).
-      Try a lower anchor (median of image + text matches, or of the cheaper half).
+- [x] Ranking anchor (Oct 25, deployed fetchItem rev 00004, findSimilar rev 00003): price-sanity now compares
+      against the **median of the cheaper half of image + text matches** (`PRICE_ANCHOR = "cheaper_half"`). Same-pool
+      comparison: image median ($885 lamp / $75 polo) and image+text median ($675 / $75) let pricey vintage/designer
+      look-alikes set the bar (the $99 lamp vanished; the polo's best visual match fell to #3); cheaper half ($99–108 /
+      $33–42) keeps the polo's best match #1 and puts the affordable lamp first or second. Trade-off: the closest
+      visual lamp match ($367) can drop to #2 behind a $99 look-alike; widening the no-penalty band to ¼–4× would
+      keep it #1. 6 ranking unit tests (29 total).
+- [ ] Channel3 sometimes returns non-English listing titles (a Zara polo in Norwegian): set country/language on searches.
 - [ ] FCM for "Needs your OK" (placeholder logs today) · PayPal link flow functions · webhooks · refunds
 - [ ] App: onboarding → fetch → results → buy/approve → activity

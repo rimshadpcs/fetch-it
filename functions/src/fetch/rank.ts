@@ -22,15 +22,35 @@ const positional = (rank: number) => 1 / (1 + rank * 0.25);
 export const relevance = (ranks: Candidate["ranks"]) =>
   (Object.entries(ranks) as [Source, number][]).reduce((sum, [src, rank]) => sum + SOURCE_WEIGHT[src] * positional(rank), 0);
 
-/** Median price of a result list (an anchor for "what this kind of thing costs", not a price we show). */
-export function medianPrice(products: C3Product[]): number | null {
-  const prices = products
+const sortedPrices = (products: C3Product[]) =>
+  products
     .map((p) => p.offers[0]?.price?.price)
     .filter((n): n is number => typeof n === "number" && n > 0)
     .sort((a, b) => a - b);
-  if (!prices.length) return null;
-  const mid = Math.floor(prices.length / 2);
-  return prices.length % 2 ? prices[mid] : (prices[mid - 1] + prices[mid]) / 2;
+const median = (sorted: number[]) => {
+  if (!sorted.length) return null;
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+};
+
+/** Median price of a result list (an anchor for "what this kind of thing costs", not a price we show). */
+export function medianPrice(products: C3Product[]): number | null {
+  return median(sortedPrices(products));
+}
+
+/**
+ * Where "a normal price for this" sits, for the price-sanity factor:
+ * - image_median: median of the visual matches (original; skews high when look-alikes are vintage/designer pieces)
+ * - all_median: median of image + text matches together (deduped by product)
+ * - cheaper_half: median of the cheaper half of image + text matches (~25th percentile)
+ */
+export type PriceAnchor = "image_median" | "all_median" | "cheaper_half";
+export function anchorPrice(image: C3Product[], text: C3Product[], kind: PriceAnchor): number | null {
+  if (kind === "image_median") return medianPrice(image);
+  const byId = new Map([...image, ...text].map((p) => [p.id, p]));
+  const prices = sortedPrices([...byId.values()]);
+  if (kind === "all_median") return median(prices);
+  return median(prices.slice(0, Math.max(1, Math.ceil(prices.length / 2))));
 }
 
 /**
