@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Camera snaps land in cache/camera/ and are deleted with the cache; only a downscaled copy is uploaded. -->
+    <cache-path name="camera" path="camera/" />
+</paths>

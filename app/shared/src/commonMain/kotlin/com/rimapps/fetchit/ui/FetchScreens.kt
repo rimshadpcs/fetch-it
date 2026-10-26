@@ -1,0 +1,352 @@
+package com.rimapps.fetchit.ui
+
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import coil3.compose.AsyncImage
+import kotlinx.coroutines.delay
+import com.rimapps.fetchit.AppState
+import com.rimapps.fetchit.Screen
+import com.rimapps.fetchit.data.Offer
+import com.rimapps.fetchit.platform.PhotoSource
+import com.rimapps.fetchit.platform.rememberPhotoSource
+
+@Composable
+fun BottomNav(app: AppState, photos: PhotoSource) {
+    val current = app.screen
+    Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 26.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        listOf(Screen.Fetch to "Fetch", Screen.Activity to "Activity", Screen.Rules to "Rules").forEach { (s, label) ->
+            val on = current == s
+            Box(
+                Modifier.height(64.dp).width(if (on) 98.dp else 86.dp).clip(RoundedCornerShape(32.dp)).background(if (on) Ink.Ink else Ink.Pill)
+                    .clickable(role = Role.Tab) { app.reset(s) },
+                contentAlignment = Alignment.Center,
+            ) { Text(label, style = body(13.sp, if (on) FontWeight.SemiBold else FontWeight.Medium, if (on) Ink.White else Ink.NavGrey)) }
+        }
+        Spacer()
+        Box(
+            Modifier.size(64.dp).shadow(6.dp, CircleShape).clip(CircleShape).background(Ink.White).clickable(role = Role.Button) { photos.pickPhoto() },
+            contentAlignment = Alignment.Center,
+        ) { Text("+", style = body(30.sp, FontWeight.Medium)) }
+    }
+}
+
+@Composable
+fun MainScaffold(app: AppState, photos: PhotoSource = rememberPhotoSource { app.startFetch(it) }, content: @Composable () -> Unit) {
+    Column(Modifier.fillMaxSize().dotted()) {
+        Box(Modifier.weight(1f)) { content() }
+        BottomNav(app, photos)
+    }
+}
+
+@Composable
+fun FetchScreen(app: AppState) {
+    val photos = rememberPhotoSource { app.startFetch(it) }
+    var mode by remember { mutableStateOf("Snap") }
+    val session = app.session
+    MainScaffold(app, photos) {
+        Column(Modifier.fillMaxSize()) {
+            Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 22.dp, top = 58.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("What should I fetch?", style = hand(32.sp), modifier = Modifier.weight(1f))
+                Box(Modifier.size(44.dp).clip(CircleShape).background(Ink.Ink).clickable { app.go(Screen.Account) }, contentAlignment = Alignment.Center) {
+                    Text(app.dogName.take(1).uppercase(), style = body(15.sp, FontWeight.SemiBold, Ink.White))
+                }
+            }
+            app.budgetLeft()?.let { left ->
+                Row(Modifier.padding(start = 24.dp, top = 4.dp), verticalAlignment = Alignment.Bottom) {
+                    Text(money(left), style = serif(20.sp, Ink.Muted))
+                    Text(" left this month", style = body(18.sp, FontWeight.SemiBold, Ink.Muted))
+                }
+            }
+            Segmented(listOf("Snap", "Upload"), mode, { it }, { mode = it }, Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 12.dp))
+            Box(Modifier.fillMaxWidth().height(1.dp).background(Ink.Divider))
+
+            if (session != null && (session.loading || session.error != null)) {
+                SniffingView(app, Modifier.weight(1f))
+            } else if (mode == "Snap") {
+                Column(Modifier.weight(1f).padding(horizontal = 22.dp, vertical = 22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(
+                        Modifier.fillMaxWidth().weight(1f).rotate(-1f).background(Color(0xFF3E3C38)).clickable { photos.takePhoto() },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Mascot(90.dp)
+                            Text("point me at it", style = hand(24.sp, Ink.White))
+                        }
+                    }
+                    Gap(16.dp)
+                    Box(Modifier.size(78.dp).shadow(6.dp, CircleShape).clip(CircleShape).background(Ink.White).clickable(role = Role.Button) { photos.takePhoto() }, contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(58.dp).clip(CircleShape).background(Ink.Ink))
+                    }
+                }
+            } else {
+                Column(Modifier.weight(1f).padding(22.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Box(
+                        Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(32.dp)).background(Color.White.copy(alpha = 0.6f))
+                            .dashedBorder().clickable { photos.pickPhoto() },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text("Upload a photo", style = body(20.sp, FontWeight.SemiBold))
+                            Text("screenshots work too!", style = hand(21.sp, Ink.Muted), modifier = Modifier.rotate(-2f))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun Modifier.dashedBorder() = drawBehind {
+    drawRoundRect(
+        Color(0xFFC9C9C5), cornerRadius = CornerRadius(32.dp.toPx()),
+        style = Stroke(2.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 10f))),
+    )
+}
+
+/** The photo, "Sniffing around…", and "I think it's a…" as soon as identify answers. */
+@Composable
+private fun SniffingView(app: AppState, modifier: Modifier) {
+    val s = app.session ?: return
+    Column(modifier.padding(horizontal = 22.dp, vertical = 22.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Box(Modifier.fillMaxWidth().weight(1f)) {
+            BoxWithConstraints(Modifier.fillMaxSize().rotate(-1f).background(Color(0xFF3E3C38))) {
+                AsyncImage(s.photo, contentDescription = "Your photo", contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+            }
+            if (s.loading) {
+                Row(
+                    Modifier.align(Alignment.TopEnd).offset((-8).dp, (-14).dp).shadow(4.dp, RoundedCornerShape(999.dp)).clip(RoundedCornerShape(999.dp))
+                        .background(Ink.White).padding(horizontal = 14.dp, vertical = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    CircularProgressIndicator(Modifier.size(14.dp), color = Ink.Ink, strokeWidth = 2.dp)
+                    Text(if (s.identified.isEmpty()) "Sniffing around…" else "Checking stores…", style = body(13.sp, FontWeight.SemiBold))
+                }
+            }
+            s.identified.firstOrNull()?.let { item ->
+                Column(
+                    Modifier.align(Alignment.BottomEnd).offset((-8).dp, 18.dp).rotate(1.5f).shadow(4.dp).background(Ink.White)
+                        .border(1.dp, Color(0xFFE6E6E3)).padding(horizontal = 14.dp, vertical = 10.dp),
+                ) {
+                    Text("I think it's a…", style = body(12.sp, FontWeight.SemiBold, Ink.Grey))
+                    Text(listOfNotNull(item.item_type, item.colors.firstOrNull()).joinToString(", "), style = hand(22.sp))
+                }
+            }
+        }
+        Gap(10.dp)
+        if (s.error != null) {
+            ErrorNote(s.error)
+            PillButton("Try another photo", onClick = { app.session = null })
+        }
+    }
+}
+
+/** Several things in the photo: tap the one to fetch. */
+@Composable
+fun WhichOneScreen(app: AppState) {
+    val s = app.session ?: return
+    val items = s.response?.items ?: s.identified
+    Column(Modifier.fillMaxSize().dotted().padding(top = 56.dp, bottom = 30.dp)) {
+        Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            BackButton({ app.back() })
+            Text("Which one?", style = hand(30.sp))
+        }
+        Text("I spotted a few things. Tap the one you want.", style = body(16.sp, color = Ink.Muted), modifier = Modifier.padding(start = 70.dp, top = 4.dp, end = 20.dp))
+        BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).padding(20.dp), contentAlignment = Alignment.Center) {
+            // Photo with the item boxes drawn on top; tapping a box picks it.
+            Box(Modifier.fillMaxSize().background(Color(0xFF3E3C38))) {
+                AsyncImage(s.photo, null, contentScale = ContentScale.FillBounds, modifier = Modifier.fillMaxSize())
+                Canvas(Modifier.fillMaxSize()) {
+                    items.forEachIndexed { i, item ->
+                        val b = item.box ?: return@forEachIndexed
+                        drawRect(if (i == 0) Ink.Accent else Color.White, Offset(b.x.toFloat() * size.width, b.y.toFloat() * size.height), Size(b.width.toFloat() * size.width, b.height.toFloat() * size.height), style = Stroke(3.dp.toPx()))
+                    }
+                }
+            }
+        }
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            items.forEachIndexed { i, item ->
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(999.dp)).background(if (i == 0) Ink.Ink else Ink.Pill)
+                        .clickable(enabled = !s.loading) { app.chooseItem(i) }.padding(horizontal = 22.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(item.item_type.ifBlank { item.search_query }, style = hand(22.sp, if (i == 0) Ink.White else Ink.Ink), modifier = Modifier.weight(1f))
+                    item.colors.firstOrNull()?.let { Text(it, style = serif(16.sp, if (i == 0) Ink.LightGrey else Ink.Muted)) }
+                }
+            }
+            if (s.loading) Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(Modifier.size(16.dp), color = Ink.Ink, strokeWidth = 2.dp)
+                Text("Checking stores…", style = body(14.sp, FontWeight.SemiBold))
+            }
+            ErrorNote(s.error)
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun ResultsScreen(app: AppState) {
+    val r = app.session?.response ?: return
+    val limit = app.rules?.perItemLimit
+    var sort by remember { mutableStateOf("Best") }
+    var underLimit by remember { mutableStateOf(false) }
+    val cheapest = r.offers.minByOrNull { it.price }
+    val shown = r.offers.let { if (sort == "Cheapest") it.sortedBy { o -> o.price } else it }.filter { !underLimit || limit == null || it.price <= limit }
+    var picked by remember { mutableStateOf(r.offers.firstOrNull()) }
+    val offer = picked?.takeIf { it in shown } ?: shown.firstOrNull()
+    var size by remember(offer) { mutableStateOf(offer?.let { defaultSize(app, it) }) }
+    val place = app.homePlace
+    // Results replace the Fetch screen while the user's thumb may still be on it (the "+" sits where Buy lands):
+    // ignore Buy taps until this screen has been visible for a moment.
+    var armed by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { delay(800); armed = true }
+
+    Box(Modifier.fillMaxSize().dotted()) {
+        Column(Modifier.fillMaxSize().padding(top = 56.dp)) {
+            Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                BackButton({ app.session = null; app.reset(Screen.Fetch) })
+                Text("Look what I found", style = hand(30.sp))
+            }
+            Row(Modifier.padding(start = 70.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(r.offers.size.toString(), style = serif(18.sp, Ink.Muted))
+                Text("matches · ${r.offers.map { it.merchant }.distinct().size} stores", style = body(16.sp, FontWeight.SemiBold, Ink.Muted))
+                Box(Modifier.shadow(3.dp, RoundedCornerShape(999.dp)).clip(RoundedCornerShape(999.dp)).background(Ink.White).padding(horizontal = 10.dp, vertical = 5.dp)) {
+                    Text("✓ prices checked", style = body(12.sp, FontWeight.SemiBold))
+                }
+            }
+            Row(Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Segmented(listOf("Best", "Cheapest"), sort, { it }, { sort = it }, Modifier.width(200.dp))
+                if (limit != null) Chip("Under ${money(limit)}", underLimit, onClick = { underLimit = !underLimit })
+            }
+            Box(Modifier.fillMaxWidth().height(1.dp).background(Ink.Divider))
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 200.dp)) {
+                if (shown.isEmpty()) Text("Nothing under your limit. Turn the filter off to see everything.", style = hand(20.sp, Ink.Muted))
+                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    listOf(0, 1).forEach { col ->
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                            shown.filterIndexed { i, _ -> i % 2 == col }.forEachIndexed { j, o ->
+                                val index = j * 2 + col
+                                RiseIn(index) {
+                                    OfferCard(
+                                        o, selected = o == offer, height = if ((index % 3) == 0) 196.dp else 160.dp, tilt = if (index % 2 == 0) -1.2f else 1.2f,
+                                        caption = when {
+                                            limit != null && o.price > limit -> "over limit, I'd ask you"
+                                            index == 0 && sort == "Best" -> "my pick: closest match"
+                                            o == cheapest -> "cheapest${o.color?.let { ", in ${it.lowercase()}" } ?: ""}"
+                                            else -> null
+                                        },
+                                        warn = limit != null && o.price > limit,
+                                        onClick = { picked = o },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // Bottom: chosen offer's size, ship-to, Buy.
+        Column(
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                .background(Brush.verticalGradient(listOf(Ink.Background.copy(alpha = 0f), Ink.Background, Ink.Background)))
+                .padding(start = 16.dp, end = 16.dp, top = 30.dp, bottom = 30.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            val sizes = offer?.sizes.orEmpty()
+            if (sizes.isNotEmpty()) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    sizes.forEach { s -> Chip(s.label, s.label == size, onClick = { size = s.label }) }
+                }
+            }
+            Row(
+                Modifier.fillMaxWidth().height(64.dp).shadow(8.dp, RoundedCornerShape(999.dp)).clip(RoundedCornerShape(999.dp)).background(Ink.White).padding(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.padding(start = 16.dp, end = 10.dp)) {
+                    Text("ship to", style = body(11.sp, FontWeight.SemiBold, Ink.Grey))
+                    Text(place?.label ?: "no address", style = body(16.sp, FontWeight.SemiBold))
+                }
+                Box(
+                    Modifier.weight(1f).height(56.dp).clip(RoundedCornerShape(999.dp)).background(Ink.Ink)
+                        .clickable(enabled = armed && offer != null && place != null) { app.go(Screen.Buying(offer!!, size)) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Buy · ", style = body(16.sp, FontWeight.SemiBold, Ink.White))
+                        Text(money(offer?.price, offer?.currency ?: "USD"), style = serif(20.sp, Ink.White))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** The user's saved size, if this offer sells it in stock (otherwise none: the rules then ask). */
+private fun defaultSize(app: AppState, o: Offer): String? {
+    val sizes = o.sizes ?: return null
+    val mine = listOfNotNull(app.sizes.top, app.sizes.waist, app.sizes.shoe?.substringAfter(' '))
+    return sizes.firstOrNull { s -> mine.any { it.equals(s.size, true) || it.equals(s.label, true) } }?.label
+}
+
+@Composable
+private fun OfferCard(o: Offer, selected: Boolean, height: androidx.compose.ui.unit.Dp, tilt: Float, caption: String?, warn: Boolean, onClick: () -> Unit) {
+    Column(Modifier.clickable(onClick = onClick)) {
+        Box(Modifier.rotate(tilt).then(if (selected) Modifier.border(3.dp, Ink.Ink) else Modifier)) {
+            ProductImage(o.imageUrl, Modifier.fillMaxWidth().height(height))
+        }
+        Column(Modifier.padding(start = 6.dp, end = 6.dp, top = 8.dp)) {
+            Row {
+                Text(o.merchant.removePrefix("www."), style = body(14.sp, FontWeight.SemiBold, Ink.Muted), maxLines = 1, modifier = Modifier.weight(1f))
+                Text(money(o.price, o.currency), style = serif(17.sp))
+            }
+            Text(o.title, style = body(12.sp, color = Ink.Grey), maxLines = 2)
+            if (caption != null) Text(caption, style = hand(19.sp, if (warn) Ink.Warning else Ink.Ink))
+        }
+    }
+}

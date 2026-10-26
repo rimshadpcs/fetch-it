@@ -399,4 +399,21 @@ Bottom nav: Fetch · Activity · Rules + round "+" (upload).
       keep it #1. 6 ranking unit tests (29 total).
 - [ ] Channel3 sometimes returns non-English listing titles (a Zara polo in Norwegian): set country/language on searches.
 - [ ] FCM for "Needs your OK" (placeholder logs today) · PayPal link flow functions · webhooks · refunds
-- [ ] App: onboarding → fetch → results → buy/approve → activity
+- [x] App, Android (Oct 26, Pixel_4 emulator against production): onboarding → fetch → results → buy/approve → activity.
+      Firebase over plain REST from shared Kotlin (`shared/.../data/Firebase.kt`): **anonymous** sign-in (provider enabled
+      in fetchit-437a0; PayPal is the real identity), callable functions incl. SSE streaming (fetchItem `items` chunk →
+      "I think it's a…"; purchaseOffer decision → undo countdown), Firestore REST reads of users/{uid}/…. The API key is
+      generated at build time from `androidApp/google-services.json` (gitignored, as is `iosApp/iosApp/GoogleService-Info.plist`).
+      Run on emulator: Welcome → PayPal link (Custom Tab, fetchit://paypal/return deep link) → Home suggested + confirmed →
+      rules ($200/$75) → sizes (local only, no setProfile yet) → name → lamp photo → 5 offers ($99–$2,270, all
+      "over limit, I'd ask you") → $367 BLOCKED (budget) → $99 NEEDS_APPROVAL → approve → PayPal `7EN777939A391250W`,
+      "Arrives Thursday" from the order → outfit → $22.90 polo AUTO_BUY (new-store ask off) → `97A010692L788711P` →
+      again + Undo → `undone`, no PayPal order, spend 121.90. Activity showed the lamp Shipped with DEMO tracking.
+      Learned:
+      - Emulator Chrome crashed on PayPal's page (`Timed out waiting for GPU channel`) and the tab closed: run the AVD
+        with `-gpu swiftshader_indirect -memory 4096`. Software rendering is slow (1–2 s frames) and once showed a stale
+        frame after the photo picker: Fetch drawn while Results was live, so "+" sat over Buy. Buy now ignores taps for
+        the first 0.8 s on Results; still, one unexplained BLOCKED buy happened during that stale-frame period.
+      - With the lag, a scripted Undo read via uiautomator (~2–3 s per dump) missed the 5 s window; tapping straight away worked.
+      - iOS actuals are stubs (photo picker, LocalAuthentication, ASWebAuthenticationSession); iOS not compiled yet.
+      - No lock screen on the device → the "Approve with fingerprint" tap itself counts (BiometricManager can't authenticate).
