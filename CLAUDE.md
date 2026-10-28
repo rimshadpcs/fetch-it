@@ -400,7 +400,14 @@ Bottom nav: Fetch · Activity · Rules + round "+" (upload).
       $33–42) keeps the polo's best match #1 and puts the affordable lamp first or second. Trade-off: the closest
       visual lamp match ($367) can drop to #2 behind a $99 look-alike; widening the no-penalty band to ¼–4× would
       keep it #1. 6 ranking unit tests (29 total).
-- [ ] Channel3 sometimes returns non-English listing titles (a Zara polo in Norwegian): set country/language on searches.
+- [x] Channel3 US + English (Oct 28). The OpenAPI spec (`api.trychannel3.com/openapi.json`) has `config: {country,
+      language, currency}` on search/image-search/similar and `?country=&language=&currency=` on product detail
+      ("matches any language when unset"). Every call now sends US/en/USD (`LOCALE` in lib/channel3.ts). Measured:
+      search results were identical with and without it (search already defaults to USD/en), the Norwegian title had
+      come from detail and is English today, and one US Zara listing is titled in Spanish even with US/en ("Polo
+      Punto Jacquard Rayas"). So also `looksNonEnglish(title)` (foreign letters like ø/ñ, or non-English shop words
+      such as rayas/punto/med) → `languageFactor` 0.3 in the final score (findSimilar: sorted last). 1 unit test
+      (35 total). Emulator vs prod: outfit → 5 English titles; abercrombie.com buy → live check "In stock" → declined.
 - [ ] PayPal webhooks
 - [x] App, Android (Oct 26, Pixel_4 emulator against production): onboarding → fetch → results → buy/approve → activity.
       Firebase over plain REST from shared Kotlin (`shared/.../data/Firebase.kt`): **anonymous** sign-in (provider enabled

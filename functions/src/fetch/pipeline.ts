@@ -2,7 +2,7 @@ import { Channel3, mainImage, type C3Filters, type C3Offer, type C3Product } fro
 import type { AttemptTrace, DetectedItem } from "../lib/gemini.js";
 import { identify } from "../lib/identify.js";
 import { cropForSearch, prepareImage } from "../lib/image.js";
-import { anchorPrice, filterByCategory, mergeAndDedupe, priceFactor, targetCategories, type Candidate, type PriceAnchor } from "./rank.js";
+import { anchorPrice, filterByCategory, languageFactor, mergeAndDedupe, priceFactor, targetCategories, type Candidate, type PriceAnchor } from "./rank.js";
 import { buyableSizes, chooseColor, colorOptionOf, normalizeSize, sizeOptionOf } from "./variants.js";
 
 const DETAIL_COUNT = 5;
@@ -62,7 +62,7 @@ export interface RankedOffer {
   colors: ColorOption[];
   matchedBy: string[];
   category: string | null;
-  /** Why it's ranked where it is: final = relevance × priceFactor. */
+  /** Why it's ranked where it is: final = relevance × priceFactor × languageFactor. */
   score: OfferScore;
 }
 export interface OfferScore {
@@ -72,6 +72,8 @@ export interface OfferScore {
   textRank: number | null;
   priceFactor: number;
   medianPrice: number | null;
+  /** 0.3 when the title looks non-English (looksNonEnglish), else 1. */
+  languageFactor: number;
 }
 export interface Timings {
   [step: string]: number;
@@ -212,7 +214,11 @@ export async function runFetch(
   const offers = pool
     .map((o) => {
       const factor = priceFactor(o.price, median);
-      return { ...o, score: { ...o.score, priceFactor: round(factor), medianPrice: median, final: round(o.score.relevance * factor) } };
+      const language = languageFactor(o.title);
+      return {
+        ...o,
+        score: { ...o.score, priceFactor: round(factor), medianPrice: median, languageFactor: language, final: round(o.score.relevance * factor * language) },
+      };
     })
     .sort((a, b) => b.score.final - a.score.final)
     .slice(0, DETAIL_COUNT);
@@ -348,6 +354,7 @@ function toOffer(c: Candidate, detail: C3Product): RankedOffer | null {
       imageRank: c.ranks.image ?? c.ranks.similar ?? null,
       textRank: c.ranks.text ?? null,
       priceFactor: 1,
+      languageFactor: 1,
       medianPrice: null,
     },
     category: detail.category?.slug ?? null,

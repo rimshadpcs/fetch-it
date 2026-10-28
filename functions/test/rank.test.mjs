@@ -1,7 +1,7 @@
 // Unit tests for ranking helpers (price anchor + price-sanity factor). Run: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { anchorPrice, priceFactor, relevance } from "../lib/fetch/rank.js";
+import { anchorPrice, priceFactor, relevance, languageFactor, looksNonEnglish } from "../lib/fetch/rank.js";
 
 const p = (id, price) => ({ id, title: id, offers: [{ domain: "x.example", price: { price, currency: "USD" } }] });
 // Lamp-like: a few cheap modern lamps, many pricey vintage look-alikes in image search.
@@ -41,4 +41,15 @@ test("relevance weighs image matches above text matches", () => {
   assert.ok(relevance({ image: 0 }) > relevance({ text: 0 }));
   assert.ok(relevance({ image: 0, text: 0 }) > relevance({ image: 0 }));
   assert.equal(relevance({ image: 4 }), 0.5);
+});
+
+test("looksNonEnglish: titles seen in Channel3 US results", () => {
+  for (const t of ["Polo Punto Jacquard Rayas", "Myk strikkepolo med stripemønster", "Camiseta de algodón manga corta", "Pull rayé femme", "Damen Pullover mit Streifen"]) {
+    assert.equal(looksNonEnglish(t), true, t);
+  }
+  for (const t of ["STRIPED KNIT POLO", "Boys’ Rugby Knit Polo", "Men's Rugby Sweater Polo", "Taby Sweater", "Glass Mushroom Table Lamp", "Café Racer Leather Jacket", "Polo Shirt with Contrast Collar", "Second Floor Square Artist"]) {
+    assert.equal(looksNonEnglish(t), false, t);
+  }
+  assert.equal(languageFactor("Polo Punto Jacquard Rayas"), 0.3);
+  assert.equal(languageFactor("STRIPED KNIT POLO"), 1);
 });

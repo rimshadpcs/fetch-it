@@ -63,6 +63,34 @@ export function priceFactor(price: number, median: number | null): number {
   return doublings <= 1 ? 1 : Math.max(0.35, 1 / doublings);
 }
 
+// Words that are common in non-English shop titles and rare in English ones (es, fr, de, it, nl, pt, nordic).
+const FOREIGN = new Set([
+  "con", "para", "rayas", "punto", "manga", "larga", "corta", "algodon", "mujer", "hombre", "nino", "nina", "camiseta", "sudadera",
+  "avec", "pour", "femme", "homme", "raye", "rayures", "manches", "chemise", "tricot",
+  "mit", "fur", "damen", "herren", "gestreift", "streifen", "strick",
+  "donna", "uomo", "righe", "maglia", "maglione",
+  "met", "voor", "dames", "heren", "gestreept",
+  "com", "listras", "feminina", "masculina", "camisa",
+  "med", "og", "och", "til", "dame", "herre", "stripet", "randig", "strikk", "strikkepolo", "genser", "troje",
+]);
+const ENGLISH = new Set(["with", "and", "for", "the", "women's", "men's", "womens", "mens", "kids", "striped", "stripe", "knit", "sleeve", "cotton"]);
+/** Letters English titles (practically) never use. */
+const FOREIGN_LETTERS = /[øåæñßãõçœ]/i;
+
+/**
+ * Channel3 has no language field and some US listings carry another language's title ("Polo Punto Jacquard
+ * Rayas"), so: foreign letters, or two foreign words, or one foreign word and no English one.
+ */
+export function looksNonEnglish(title: string): boolean {
+  if (FOREIGN_LETTERS.test(title)) return true;
+  const tokens = title.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().split(/[^a-z']+/).filter(Boolean);
+  const foreign = tokens.filter((t) => FOREIGN.has(t)).length;
+  const english = tokens.filter((t) => ENGLISH.has(t)).length;
+  return foreign >= 2 || (foreign >= 1 && english === 0);
+}
+/** Non-English titles sink below English ones without disappearing (there may be nothing else). */
+export const languageFactor = (title: string) => (looksNonEnglish(title) ? 0.3 : 1);
+
 const STOP = new Set(["and", "the", "with", "for", "vintage", "style", "home", "apparel", "accessories"]);
 const words = (s: string) =>
   s

@@ -60,6 +60,12 @@ export interface C3Filters {
   gender?: "male" | "female";
 }
 
+/**
+ * Our users and our sandbox merchant are US/USD. Search defaults to USD/en but isn't tied to a country, and
+ * product detail "matches any language when unset" (spec): a Zara polo came back with its Norwegian title.
+ */
+export const LOCALE = { country: "US", language: "en", currency: "USD" } as const;
+
 /** Passing any filters replaces Channel3's defaults (new + InStock), so we always restate them. */
 const withDefaults = (f: C3Filters) => ({ availability: ["InStock", "LimitedAvailability"], conditions: ["new"], ...f });
 
@@ -87,7 +93,7 @@ export class Channel3 {
 
   // limit 10: ~1.1 s and steady; limit 20 swings 1.4–3.6 s. We only show the top 5.
   textSearch(query: string, filters: C3Filters = {}, limit = 10) {
-    return this.call<C3SearchResponse>("/v1/search", { query, limit, filters: withDefaults(filters) });
+    return this.call<C3SearchResponse>("/v1/search", { query, limit, filters: withDefaults(filters), config: LOCALE });
   }
 
   imageSearch(jpeg: Buffer, filters: C3Filters = {}, limit = 10) {
@@ -95,12 +101,13 @@ export class Channel3 {
       base64_image: jpeg.toString("base64"),
       limit,
       filters: withDefaults(filters),
+      config: LOCALE,
     });
   }
 
   /** Nearest neighbours of a catalog product ("More like this" / "Find cheaper"). Same filters as search. */
   similar(productId: string, filters: C3Filters = {}, limit = 10) {
-    return this.call<C3SearchResponse>("/v1/similar", { product_id: productId, limit, filters: withDefaults(filters) });
+    return this.call<C3SearchResponse>("/v1/similar", { product_id: productId, limit, filters: withDefaults(filters), config: LOCALE });
   }
 
   // Price tracking (v0). Response shapes checked against the live API (the guide says `price_history`;
@@ -129,10 +136,9 @@ export class Channel3 {
    * Best Buy at $34.99 while detail only shows the brand's own store at $49.99.
    */
   product(id: string, options: Record<string, string> = {}, websiteIds: string[] = []) {
-    const qs = new URLSearchParams(Object.entries(options).map(([name, label]) => [`option_${name}`, label]));
+    const qs = new URLSearchParams({ ...LOCALE, ...Object.fromEntries(Object.entries(options).map(([name, label]) => [`option_${name}`, label])) });
     if (websiteIds.length) qs.set("website_ids", websiteIds.join(","));
-    const query = qs.size ? `?${qs}` : "";
-    return this.call<C3Product>(`/v1/products/${encodeURIComponent(id)}${query}`, undefined, 5000);
+    return this.call<C3Product>(`/v1/products/${encodeURIComponent(id)}?${qs}`, undefined, 5000);
   }
 }
 

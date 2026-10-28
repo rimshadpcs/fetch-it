@@ -5,7 +5,7 @@ import { Channel3, type C3Filters } from "../lib/channel3.js";
 import { requireUid, verifyOffer } from "../purchase/purchase.js";
 import { signOffers, type SignedOffer } from "./fetchItem.js";
 import { OfferHydrator } from "./pipeline.js";
-import { mergeAndDedupe, normalizeTitle } from "./rank.js";
+import { mergeAndDedupe, normalizeTitle, languageFactor } from "./rank.js";
 
 const MIN_RESULTS = 5;
 
@@ -54,7 +54,9 @@ export const findSimilar = onCall<{ offerId: string; maxPrice?: number }>(
     const hydrator = new OfferHydrator(c3);
     const { offers, dropped } = await hydrator.hydrate(candidates, claim.color ? [claim.color.label] : []);
     // maxPrice is enforced on the live detail price, never the price in the similar results.
-    const kept = maxPrice === undefined ? offers : offers.filter((o) => o.price <= maxPrice + 1e-9);
+    const kept = (maxPrice === undefined ? offers : offers.filter((o) => o.price <= maxPrice + 1e-9))
+      // Stable: similarity order otherwise; non-English titles go last.
+      .sort((a, b) => languageFactor(b.title) - languageFactor(a.title));
 
     const timingMs = Math.round(performance.now() - start);
     logger.info("findSimilar", { uid, productId: claim.productId, scope, candidates: candidates.length, offers: kept.length, timingMs });
