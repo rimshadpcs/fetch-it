@@ -46,6 +46,7 @@ sealed interface Screen {
     data class Buying(val offer: Offer, val size: String?, val requestId: String) : Screen
     data class Approve(val purchaseId: String) : Screen
     data class Done(val purchaseId: String) : Screen
+    data class Order(val purchaseId: String) : Screen
 }
 
 /** The user's saved sizes (local for now; a setProfile function would sync them). */

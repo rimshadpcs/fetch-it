@@ -79,6 +79,9 @@ class FetchApi(val firebase: Firebase = Firebase(httpClient())) {
     suspend fun undoPurchase(purchaseId: String): Purchase =
         firebase.call("undoPurchase", buildJsonObject { put("purchaseId", purchaseId) }).to()
 
+    /** Cancel before it ships: PayPal refunds the capture, the order becomes `cancelled`, spend is rolled back. */
+    suspend fun cancelOrder(orderId: String): Order = firebase.call("cancelOrder", buildJsonObject { put("orderId", orderId) }).to()
+
     suspend fun registerPushToken(token: String, platform: String) {
         firebase.call("registerPushToken", buildJsonObject { put("token", token); put("platform", platform) })
     }
@@ -91,6 +94,8 @@ class FetchApi(val firebase: Firebase = Firebase(httpClient())) {
     /** A purchase document (e.g. opened from a notification), in the shape the purchase callables return. */
     suspend fun purchase(purchaseId: String): Purchase? =
         firebase.getDoc("${users()}/purchases/$purchaseId")?.let { JsonObject(it + ("purchaseId" to JsonPrimitive(purchaseId))).to() }
+
+    suspend fun order(purchaseId: String): Order? = firebase.getDoc("${users()}/orders/$purchaseId")?.to()
 
     suspend fun profile(): Profile? = firebase.getDoc("${users()}/profile/main")?.to()
     suspend fun places(): List<Place> =

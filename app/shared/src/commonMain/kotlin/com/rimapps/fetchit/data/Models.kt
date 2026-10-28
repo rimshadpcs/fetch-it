@@ -120,6 +120,31 @@ data class HouseRules(
     val askIfUnsureAboutSize: Boolean = true,
 )
 
+/** users/{uid}/orders/{purchaseId}: the simulated order behind a completed purchase. */
+@Serializable
+data class Order(
+    val id: String = "",
+    val purchaseId: String = "",
+    val status: String = "",
+    val retailer: String = "",
+    val retailerOrderId: String = "",
+    val items: List<OrderItem> = emptyList(),
+    val totalCents: Long = 0,
+    val currency: String = "USD",
+    val promisedDeliveryDate: String? = null,
+    val trackingNumber: String? = null,
+    val refund: Refund? = null,
+) {
+    /** Before it ships, an order can be cancelled (and refunded). */
+    val cancellable get() = status == "placed" || status == "confirmed"
+}
+
+@Serializable
+data class OrderItem(val title: String = "", val imageUrl: String? = null, val size: String? = null)
+
+@Serializable
+data class Refund(val id: String = "", val status: String = "", val amountCents: Long = 0)
+
 /** users/{uid}/profile/main (setProfile). Shoe sizes are "US 9" / "UK 8" / "EU 42". */
 @Serializable
 data class Profile(

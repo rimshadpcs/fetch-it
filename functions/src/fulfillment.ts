@@ -294,6 +294,7 @@ export const cancelOrder = onCall<{ orderId: string }>({ secrets: fulfilmentSecr
       tx.set(userDoc(uid).collection("activity").doc(), {
         type: "order",
         orderId: ref.id,
+        purchaseId: before.purchaseId, // shows on the order's card in the app
         status: "cancel_failed",
         summary: `Couldn't cancel order ${before.retailerOrderId}: ${(e as Error).message}`,
         simulated: true,

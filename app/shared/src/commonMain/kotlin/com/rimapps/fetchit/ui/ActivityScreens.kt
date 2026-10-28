@@ -45,12 +45,14 @@ import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
+fun statusLabel(status: String) = LABEL[status] ?: status.replace('_', ' ').replaceFirstChar { it.uppercase() }
+
 private val LABEL = mapOf(
     "completed" to "Bought", "pending_undo" to "Buying", "approved" to "Paying", "charging" to "Paying",
     "needs_approval" to "Needs your OK", "blocked" to "Blocked", "declined" to "Declined", "undone" to "Undone",
     "failed" to "Failed", "refunded" to "Refunded", "placed" to "Ordered", "confirmed" to "Confirmed",
     "shipped" to "Shipped", "delivered" to "Delivered", "cancelled" to "Cancelled", "linked" to "PayPal linked",
-    "watching" to "Watching", "triggered" to "Price dropped",
+    "watching" to "Watching", "triggered" to "Price dropped", "cancelling" to "Cancelling", "cancel_failed" to "Couldn't cancel",
 )
 
 private fun group(e: ActivityEntry) = when (e.status) {
@@ -93,7 +95,7 @@ fun ActivityScreen(app: AppState) {
 
 @Composable
 private fun ActivityCard(app: AppState, e: ActivityEntry, tilt: Float) {
-    val label = LABEL[e.status] ?: e.status
+    val label = statusLabel(e.status)
     val heading = listOfNotNull(label, e.price?.let { money(it, e.currency ?: "USD") }).joinToString(" · ")
     PaperNote(Modifier.fillMaxWidth(), tilt = tilt) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -110,9 +112,14 @@ private fun ActivityCard(app: AppState, e: ActivityEntry, tilt: Float) {
                 if (e.retailer != null && e.type != "paypal") Text("${e.retailer} · demo store · sandbox", style = body(11.sp, color = Ink.Grey))
             }
         }
-        when (e.status) {
-            "needs_approval" -> PillButton("Review", height = 44.dp, onClick = { app.go(Screen.Approve(e.purchaseId!!)) })
-            "blocked" -> PillButton("Edit rules", dark = false, height = 44.dp, onClick = { app.reset(Screen.Rules) })
+        when {
+            e.status == "needs_approval" -> PillButton("Review", height = 44.dp, onClick = { app.go(Screen.Approve(e.purchaseId!!)) })
+            e.status == "blocked" -> PillButton("Edit rules", dark = false, height = 44.dp, onClick = { app.reset(Screen.Rules) })
+            // Paid: the order (and, until it ships, Cancel order).
+            e.purchaseId != null && (e.type == "order" || e.status == "completed") -> PillButton(
+                if (e.status in setOf("completed", "placed", "confirmed")) "Order · cancel" else "Order details",
+                dark = false, height = 44.dp, onClick = { app.go(Screen.Order(e.purchaseId)) },
+            )
         }
     }
 }
@@ -126,7 +133,7 @@ private fun today(): String {
 }
 
 @OptIn(ExperimentalTime::class)
-private fun timeAgo(millis: Long): String {
+internal fun timeAgo(millis: Long): String {
     if (millis == 0L) return ""
     val tz = TimeZone.currentSystemDefault()
     val then = Instant.fromEpochMilliseconds(millis).toLocalDateTime(tz)

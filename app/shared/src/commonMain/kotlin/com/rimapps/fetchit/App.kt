@@ -28,6 +28,7 @@ import com.rimapps.fetchit.ui.FetchTheme
 import com.rimapps.fetchit.ui.Ink
 import com.rimapps.fetchit.ui.LinkPayPalScreen
 import com.rimapps.fetchit.ui.OnbRulesScreen
+import com.rimapps.fetchit.ui.OrderScreen
 import com.rimapps.fetchit.ui.OnbSizesScreen
 import com.rimapps.fetchit.ui.ReadyScreen
 import com.rimapps.fetchit.ui.ResultsScreen
@@ -70,6 +71,7 @@ fun App(register: ((() -> Boolean) -> Unit)? = null) {
                         is Screen.Buying -> BuyingScreen(app, screen)
                         is Screen.Approve -> ApproveScreen(app, screen)
                         is Screen.Done -> DoneScreen(app, screen)
+                        is Screen.Order -> OrderScreen(app, screen)
                     }
                 }
             }

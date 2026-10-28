@@ -453,3 +453,9 @@ Bottom nav: Fetch · Activity · Rules + round "+" (upload).
       Emulator vs prod (watch docs `pushtest`, `pushtest2` written for the test user, checkWatches force-run from Cloud
       Scheduler): app in background → notification → tap → approval sheet; app killed → tap cold-starts into the
       sheet; in-app Buy needing approval → push sent (log `push sent`) but not shown over the sheet. All declined.
+- [x] Cancel order (Oct 28): Activity cards for paid purchases → "Order · cancel" / "Order details" → Order screen
+      (item, total, store + DEMO order id, refund note, timeline = every Activity entry for the purchase, refreshed
+      every 5 s). Before shipping: "Cancel order" → "Tap again: cancel and refund $X" → `cancelOrder`. A failed
+      cancel's activity entry now carries the purchaseId. Emulator vs prod: $22.90 polo auto-bought → cancelled
+      within the 2-min window → order DEMO-98303 `cancelled`, PayPal refund `4M858077FS514363F` COMPLETED, spend back
+      to $144.80, card "Cancelled. $22.90 refunded to your PayPal."; a shipped order shows no Cancel.
