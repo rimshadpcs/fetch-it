@@ -12,6 +12,8 @@ import com.rimapps.fetchit.data.FunctionsException
 import com.rimapps.fetchit.data.HouseRules
 import com.rimapps.fetchit.data.Offer
 import com.rimapps.fetchit.data.Place
+import com.rimapps.fetchit.data.Profile
+import com.rimapps.fetchit.data.ProfileSizes
 import com.rimapps.fetchit.data.Purchase
 import com.rimapps.fetchit.data.UserDoc
 import com.rimapps.fetchit.platform.KeyValueStore
@@ -75,6 +77,8 @@ class AppState(val scope: CoroutineScope, val api: FetchApi = FetchApi()) {
     /** Latest known state of purchases started in this app run (by id). */
     val purchases = mutableStateOf<Map<String, Purchase>>(emptyMap())
 
+    val onboarded: Boolean get() = store.get("onboarded") == "1"
+
     private fun initialScreen(): Screen = if (store.get("onboarded") == "1" && api.firebase.signedIn) Screen.Fetch else Screen.Welcome
 
     // ---- Navigation ----
@@ -85,14 +89,35 @@ class AppState(val scope: CoroutineScope, val api: FetchApi = FetchApi()) {
     fun replace(s: Screen) { stack[stack.lastIndex] = s }
 
     // ---- Profile ----
+    // Profile: saved server-side with setProfile (the rules engine reads the sizes); the phone copy is a cache
+    // so screens show it instantly and offline.
     fun saveDogName(name: String) {
-        dogName = name.trim().ifBlank { "Scout" }
-        store.set("dogName", dogName)
+        cacheDogName(name.trim().ifBlank { "Scout" })
+        scope.launch { runCatching { api.setProfile(dogName = dogName) } }
     }
 
     fun saveSizes(s: Sizes) {
+        cacheSizes(s)
+        scope.launch {
+            runCatching { api.setProfile(sizes = ProfileSizes(s.top, s.waist, s.shoe, s.fit), askIfUnsure = s.askIfUnsure) }
+                .onSuccess { rules = rules?.copy(askIfUnsureAboutSize = s.askIfUnsure) }
+        }
+    }
+
+    private fun cacheDogName(name: String) {
+        dogName = name
+        store.set("dogName", name)
+    }
+
+    private fun cacheSizes(s: Sizes) {
         sizes = s
         store.set("sizes", listOf(s.top, s.waist, s.shoe, s.fit, s.askIfUnsure.toString()).joinToString("|") { it ?: "" })
+    }
+
+    /** Server copy wins: another device (or a reinstall) may have changed it. */
+    private fun applyProfile(p: Profile) {
+        p.dogName?.let(::cacheDogName)
+        cacheSizes(Sizes(p.sizes.top, p.sizes.waist, p.sizes.shoe, p.sizes.fit, p.askIfUnsure ?: sizes.askIfUnsure))
     }
 
     private fun loadSizes(): Sizes {
@@ -123,6 +148,7 @@ class AppState(val scope: CoroutineScope, val api: FetchApi = FetchApi()) {
         runCatching {
             user = api.user()
             rules = api.rules()
+            api.profile()?.let(::applyProfile)
             places = api.places()
             monthToDate = api.monthToDate()
         }

@@ -188,10 +188,11 @@ fun AccountScreen(app: AppState) {
             Text("You & ${app.dogName}", style = hand(30.sp))
         }
         Column(Modifier.padding(22.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Row(Modifier.clickable { app.go(Screen.Ready) }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Mascot(80.dp)
                 Column {
                     Text(app.dogName, style = hand(30.sp))
+                    Text("rename", style = serif(16.sp, Ink.Muted))
                     Text(app.user.paypalEmail ?: "PayPal not linked", style = body(14.sp, color = Ink.Muted))
                 }
             }

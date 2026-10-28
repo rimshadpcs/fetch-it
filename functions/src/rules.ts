@@ -12,6 +12,31 @@ export interface HouseRules {
   askIfUnsureAboutSize: boolean;
 }
 
+/** users/{uid}/profile/main: the user's sizes, saved with setProfile. */
+export interface Profile {
+  sizes?: { top?: string | null; waist?: string | null; shoe?: string | null; fit?: string | null };
+  askIfUnsure?: boolean;
+  dogName?: string;
+}
+
+const BOTTOMS = /(^|-)(pants|trousers|jeans|shorts|joggers|sweatpants|leggings|skirts|chinos)(-\d+)?$/;
+
+/**
+ * The saved size for this kind of item, as the canonical size the store's options are compared with:
+ * shoes → shoe size (US sizing only: our stores are US and we don't guess conversions), bottoms → waist,
+ * any other clothing → top size. Null when nothing applies.
+ */
+export function profileSize(categoryPath: string[], profile: Profile | null | undefined): string | null {
+  const sizes = profile?.sizes;
+  if (!sizes) return null;
+  if (categoryPath.some((c) => /(^|-)(shoes|footwear|sneakers|boots)(-\d+)?$/.test(c))) {
+    const m = sizes.shoe?.match(/^US\s+(\d+(?:\.5)?)$/i);
+    return m ? m[1] : null;
+  }
+  if (categoryPath.some((c) => BOTTOMS.test(c))) return sizes.waist ?? null;
+  return sizes.top ?? null;
+}
+
 export interface OfferForRules {
   /** Live price from Channel3 product detail, fetched right before deciding. Never the search price.
    *  Null when the store no longer lists it. */
@@ -32,6 +57,8 @@ export interface RulesInput {
   offer: OfferForRules;
   /** Requested size label (as the store writes it, or canonical). */
   size?: string | null;
+  /** Saved sizes: used when no size was requested; its askIfUnsure wins over rules.askIfUnsureAboutSize. */
+  profile?: Profile | null;
   /** The saved place the user picked, or null if it isn't one of their saved places. */
   place: { id: string; label: string } | null;
   /** Stores the user has bought from before. */
@@ -63,7 +90,7 @@ export function money(amount: number, currency = "USD"): string {
 const sameSize = (a: string, b: { label: string; size: string | null }) =>
   a.trim().toLowerCase() === b.label.trim().toLowerCase() || (b.size !== null && a.trim().toUpperCase() === b.size);
 
-export function decide(input: RulesInput): { decision: Decision; reasons: Reason[] } {
+export function decide(input: RulesInput): { decision: Decision; reasons: Reason[]; size: string | null } {
   const { rules, offer, monthToDate, place, knownStores } = input;
   const m = (n: number) => money(n, rules.currency);
   const reasons: Reason[] = [];
@@ -130,17 +157,23 @@ export function decide(input: RulesInput): { decision: Decision; reasons: Reason
     add("saved_place", place !== null, "block", place ? `Ships to ${place.label}` : "That address isn't one of your saved places");
   }
 
-  // Size
+  // The size label to order (the request, or the saved size as the store writes it).
+  let chosenSize: string | null = input.size?.trim() || null;
+  // Size: the one asked for, else the saved size for this kind of item.
   if (offer.sizes) {
-    const wanted = input.size?.trim();
+    const asked = input.size?.trim() || null;
+    const saved = asked ? null : profileSize(offer.categoryPath, input.profile);
+    const wanted = asked ?? saved;
+    const whose = saved ? "Your size" : "Size";
     const match = wanted ? offer.sizes.find((s) => sameSize(wanted, s)) : undefined;
+    chosenSize = match?.label ?? asked;
     if (wanted && !match) {
-      add("size", false, "block", `Size ${wanted} isn't available in this colour`);
+      add("size", false, "block", `${whose} ${wanted} isn't available in this colour`);
     } else if (match && match.available && UNBUYABLE.has(match.available)) {
-      add("size", false, "block", `Size ${match.label} is sold out`);
+      add("size", false, "block", `${whose} ${match.label} is sold out`);
     } else if (match) {
-      add("size", true, "ask", `Size ${match.label} is ${match.available === "InStock" ? "in stock" : "available"}`);
-    } else if (rules.askIfUnsureAboutSize) {
+      add("size", true, "ask", `${whose} ${match.label} is ${match.available === "InStock" ? "in stock" : "available"}`);
+    } else if (input.profile?.askIfUnsure ?? rules.askIfUnsureAboutSize) {
       add("size", false, "ask", "I'm not sure which size you want");
     } else {
       add("size", false, "block", "Pick a size first");
@@ -153,7 +186,7 @@ export function decide(input: RulesInput): { decision: Decision; reasons: Reason
     : failed.length && !input.approved
       ? "NEEDS_APPROVAL"
       : "AUTO_BUY";
-  return { decision, reasons };
+  return { decision, reasons, size: chosenSize };
 }
 
 const pretty = (slug: string) =>

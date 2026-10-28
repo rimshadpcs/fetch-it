@@ -313,8 +313,9 @@ fun OnbSizesScreen(app: AppState) {
             Toggle("Ask me if I'm unsure", s.askIfUnsure) { s = s.copy(askIfUnsure = it) }
         }
         Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            PillButton("Save my sizes", onClick = { app.saveSizes(s); app.go(Screen.Ready) })
-            PillButton("Skip, ask me later", dark = false, height = 52.dp, onClick = { app.go(Screen.Ready) })
+            // From Account (already onboarded) this is an edit: go back instead of on to "Meet your fetcher".
+            PillButton(if (app.onboarded) "Save" else "Save my sizes", onClick = { app.saveSizes(s); if (app.onboarded) app.back() else app.go(Screen.Ready) })
+            if (!app.onboarded) PillButton("Skip, ask me later", dark = false, height = 52.dp, onClick = { app.go(Screen.Ready) })
         }
     }
 }
@@ -355,9 +356,10 @@ fun ReadyScreen(app: AppState) {
                 ).forEach { Chip(it, false, onClick = {}) }
             }
         }
-        PillButton("Start fetching", modifier = Modifier.padding(horizontal = 20.dp), onClick = {
+        // From Account (already onboarded) this is a rename.
+        PillButton(if (app.onboarded) "Save" else "Start fetching", modifier = Modifier.padding(horizontal = 20.dp), onClick = {
             app.saveDogName(name)
-            app.finishOnboarding()
+            if (app.onboarded) app.back() else app.finishOnboarding()
         })
     }
 }

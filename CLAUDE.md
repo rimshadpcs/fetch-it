@@ -87,7 +87,7 @@ KMP app ──Firebase Auth──▶ Cloud Functions (TypeScript)
 | `checkWatchesNow` ✅ | callable "check now" for the caller's own watches (how the emulator test runs a check) |
 | `findSimilar` ✅ | `{offerId, maxPrice?}`: "More like this" / "Find cheaper" via Channel3 `/v1/similar`, signed offers |
 | `setRules` | update house rules (reads come straight from Firestore) |
-| `setProfile` | sizes, addresses, dog name |
+| `setProfile` ✅ | `{sizes?: {top, waist, shoe, fit}, askIfUnsure?, dogName?}` → `users/{uid}/profile/main` (only the fields sent; null clears a size); ask-if-unsure mirrored with the rules doc both ways |
 | `startPayPalLink` ✅ | onboarding: Vault v3 setup token → approval URL; returns to `fetchit://paypal/return` / `…/cancel` |
 | `completePayPalLink` ✅ | `{token}` (setup token id): vault it, store token in `vault/{uid}` only, suggest PayPal's shipping address as Home, `users/{uid}.paypalLinked = true`. Nothing charged |
 | `confirmPlace` ✅ | `{placeId}`: user confirms a suggested place (suggested places don't count as saved until then) |
@@ -119,6 +119,8 @@ Outcomes: `AUTO_BUY` (with ~5s undo) · `NEEDS_APPROVAL` · `BLOCKED` (nothing c
 `users/{uid}/settings/rules` (HouseRules) · `places/{placeId}` (label, fullName, line1, line2, city, state,
 postalCode, countryCode) · `stores/{merchant}` · `spend/{YYYY-MM}` {total} · `purchases/{id}` · `activity/{id}`.
 `watches/{id}` (status watching → triggered, target, last price, purchase id).
+`profile/main` {sizes {top XS–XXXL, waist 24–48, shoe "US 9"/"UK 8"/"EU 42", fit}, askIfUnsure, dogName}: the size rule
+uses it when no size is sent (`profileSize`: shoes → shoe size, US sizing only; bottoms → waist; other clothing → top).
 PayPal vault token lives in top-level **`vault/{uid}`**, which clients can't read (rules test covers it).
 Spend is stored as integer `totalCents` (float increments drift). The watches collection-group query needs
 the field override in `firestore.indexes.json`.
@@ -432,3 +434,12 @@ Bottom nav: Fetch · Activity · Rules + round "+" (upload).
       missing id rejected. Emulator vs prod: switching to Rules mid-fetch + 6 taps where Buy would be → 0 purchase
       calls; instant tap on a fresh Results ignored, later tap → exactly 1 call.
       - The emulators need Java 21+: `JAVA_HOME=~/Library/Java/JavaVirtualMachines/jbr-21.0.5/Contents/Home`.
+- [x] setProfile (Oct 28): sizes/fit/dog name/ask-if-unsure server-side; the rules engine's size rule falls back to the
+      saved size ("Your size MED is in stock", recorded on the purchase as the store's label; sold out → BLOCKED);
+      the profile's askIfUnsure wins over the rules field. App saves through setProfile, keeps a local cache, and the
+      server copy replaces the cache on refresh. Tests: 5 new rule unit tests (34 total), `npm run test:profile`
+      (emulators + live Channel3, no charge: Nordstrom fleece, no size sent + top S → "Your size Small is in stock").
+      Emulator vs prod: sizes L/32/US 9 saved from Account → profile/main; rename to Biscuit → server; cached name
+      set to Rex on the phone → back to Biscuit after the start-up refresh.
+      - A brand-new callable answered 401 ("not authorized to invoke this service") for ~2 min after its first
+        deploy: the allUsers invoker binding lags behind creation. Wait, or redeploy, before testing a new function.

@@ -1,7 +1,7 @@
 // Unit tests for the house rules engine. Run: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { decide, money } from "../lib/rules.js";
+import { decide, money, profileSize } from "../lib/rules.js";
 
 const rules = {
   currency: "USD",
@@ -126,4 +126,53 @@ test("money formatting", () => {
   assert.equal(money(53), "$53");
   assert.equal(money(42.5), "$42.50");
   assert.equal(money(10, "EUR"), "EUR 10");
+});
+
+// ---------- sizes from the saved profile (setProfile) ----------
+const sweatshirt = {
+  price: 40,
+  currency: "USD",
+  categoryPath: ["apparel-accessories", "clothing", "shirts-tops", "sweatshirts-3"],
+  merchant: "lamps.example",
+  inStock: true,
+  sizes: [
+    { label: "SML", size: "S", available: "InStock" },
+    { label: "MED", size: "M", available: "InStock" },
+    { label: "LRG", size: "L", available: "OutOfStock" },
+  ],
+};
+const profile = { sizes: { top: "M", waist: "32", shoe: "US 9", fit: "Regular" }, askIfUnsure: true };
+
+test("profileSize picks the slot from the category path", () => {
+  assert.equal(profileSize(sweatshirt.categoryPath, profile), "M");
+  assert.equal(profileSize(["apparel-accessories", "clothing", "pants", "joggers-4"], profile), "32");
+  assert.equal(profileSize(["apparel-accessories", "shoes", "sneakers"], profile), "9");
+  assert.equal(profileSize(["apparel-accessories", "shoes"], { sizes: { shoe: "EU 42" } }), null, "no US/EU guessing");
+  assert.equal(profileSize(sweatshirt.categoryPath, null), null);
+});
+
+test("no size asked: the saved size in stock → AUTO_BUY with the store's label", () => {
+  const r = decide({ ...base, offer: sweatshirt, profile });
+  assert.equal(r.decision, "AUTO_BUY");
+  assert.equal(r.size, "MED");
+  assert.equal(msg(r, "size"), "Your size MED is in stock");
+});
+
+test("saved size sold out → BLOCKED", () => {
+  const r = decide({ ...base, offer: sweatshirt, profile: { ...profile, sizes: { top: "L" } } });
+  assert.equal(r.decision, "BLOCKED");
+  assert.equal(msg(r, "size"), "Your size LRG is sold out");
+});
+
+test("an explicit size wins over the profile", () => {
+  const r = decide({ ...base, offer: sweatshirt, size: "S", profile });
+  assert.equal(r.size, "SML");
+  assert.equal(msg(r, "size"), "Size SML is in stock");
+});
+
+test("no saved size: the profile's askIfUnsure decides between asking and blocking", () => {
+  assert.equal(decide({ ...base, offer: sweatshirt, profile: { askIfUnsure: true } }).decision, "NEEDS_APPROVAL");
+  const r = decide({ ...base, offer: sweatshirt, profile: { askIfUnsure: false } });
+  assert.equal(r.decision, "BLOCKED");
+  assert.equal(msg(r, "size"), "Pick a size first");
 });

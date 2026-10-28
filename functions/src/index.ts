@@ -12,4 +12,4 @@ export { findSimilar } from "./fetch/findSimilar.js";
 export { advanceOrders, advanceOrder, cancelOrder } from "./fulfillment.js";
 export { startPayPalLink, completePayPalLink, confirmPlace } from "./paypalLink.js";
 export { sweepStuckPurchases, runMaintenance } from "./purchase/cleanup.js";
-export { setRules } from "./settings.js";
+export { setProfile, setRules } from "./settings.js";

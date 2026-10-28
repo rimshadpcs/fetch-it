@@ -10,6 +10,7 @@
     "logs": "firebase functions:log",
     "test:rules": "node test/rules.mjs",
     "test:idempotency": "node --test test/idempotency.mjs",
+    "test:profile": "node --test test/profile.mjs",
     "test": "npm run build && node --test test/*.test.mjs"
   },
   "engines": {

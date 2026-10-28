@@ -25,6 +25,17 @@ class FetchApi(val firebase: Firebase = Firebase(httpClient())) {
     suspend fun confirmPlace(placeId: String) { firebase.call("confirmPlace", buildJsonObject { put("placeId", placeId) }) }
     suspend fun setRules(rules: HouseRules): HouseRules = firebase.call("setRules", json.encodeToJsonElement(rules)).to()
 
+    /** Only the fields given are changed (sizes: all four are sent, null clears one). */
+    suspend fun setProfile(sizes: ProfileSizes? = null, askIfUnsure: Boolean? = null, dogName: String? = null): Profile =
+        firebase.call(
+            "setProfile",
+            buildJsonObject {
+                sizes?.let { put("sizes", json.encodeToJsonElement(ProfileSizes.serializer(), it)) }
+                askIfUnsure?.let { put("askIfUnsure", it) }
+                dogName?.let { put("dogName", it) }
+            },
+        ).to()
+
     // ---- Fetch ----
     /**
      * Photo → items → offers. [onItems] fires as soon as identify answers (before Channel3 search finishes),
@@ -72,6 +83,7 @@ class FetchApi(val firebase: Firebase = Firebase(httpClient())) {
 
     suspend fun user(): UserDoc = firebase.getDoc(users())?.to() ?: UserDoc()
     suspend fun rules(): HouseRules? = firebase.getDoc("${users()}/settings/rules")?.to()
+    suspend fun profile(): Profile? = firebase.getDoc("${users()}/profile/main")?.to()
     suspend fun places(): List<Place> =
         firebase.listDocs("${users()}/places").map { it.withPlaceId().to() }
 

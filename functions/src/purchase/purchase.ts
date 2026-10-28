@@ -13,13 +13,16 @@ import { Channel3 } from "../lib/channel3.js";
 import { db, monthKey, userDoc } from "../lib/db.js";
 import { PayPal, PayPalError, type ShippingAddress } from "../lib/paypal.js";
 import { InvalidToken, verify, type OfferClaim } from "../lib/sign.js";
-import { decide, money, type Decision, type HouseRules, type Reason } from "../rules.js";
+import { decide, money, type Decision, type HouseRules, type Profile, type Reason } from "../rules.js";
 import { fetchLiveOffer, type LiveOffer } from "./live.js";
 import { placeDemoOrder } from "../fulfillment.js";
 import { DEMO_MIN_INSTANCES } from "../options.js";
 
 /** Seconds between "Fetched!" and the charge, while the app shows Undo. */
 export const UNDO_SECONDS = 5;
+
+/** users/{uid}/profile/main: sizes, fit, dog name, ask-if-unsure (setProfile). */
+export const profileRef = (uid: string) => userDoc(uid).collection("profile").doc("main");
 
 /**
  * Hackathon demo: PayPal charges go to our sandbox merchant, and no order is placed with the real store.
@@ -132,12 +135,13 @@ function logActivity(tx: Transaction, uid: string, purchaseId: string, p: Partia
 async function readContext(tx: Transaction, uid: string, placeId: string) {
   const user = userDoc(uid);
   const month = monthKey();
-  const [rulesSnap, placeSnap, storesSnap, spendSnap, vaultSnap] = await Promise.all([
+  const [rulesSnap, placeSnap, storesSnap, spendSnap, vaultSnap, profileSnap] = await Promise.all([
     tx.get(user.collection("settings").doc("rules")),
     tx.get(user.collection("places").doc(placeId)),
     tx.get(user.collection("stores")),
     tx.get(user.collection("spend").doc(month)),
     tx.get(db.collection("vault").doc(uid)),
+    tx.get(profileRef(uid)),
   ]);
   if (!rulesSnap.exists) throw new HttpsError("failed-precondition", "Set your house rules first.");
   // A place PayPal only suggested (link flow) isn't saved until the user confirms it.
@@ -149,6 +153,7 @@ async function readContext(tx: Transaction, uid: string, placeId: string) {
     knownStores: storesSnap.docs.map((d) => d.data().merchant as string),
     monthToDate: ((spendSnap.data()?.totalCents as number | undefined) ?? 0) / 100,
     vaultId: (vaultSnap.data()?.paypalVaultId as string | undefined) ?? null,
+    profile: (profileSnap.data() as Profile | undefined) ?? null,
   };
 }
 
@@ -334,11 +339,12 @@ export async function startPurchase(
     const existing = await tx.get(ref);
     if (existing.exists) return { doc: existing.data() as PurchaseDoc, replayed: true };
     const ctx = await readContext(tx, uid, opts.placeId);
-    const { decision, reasons } = decide({
+    const { decision, reasons, size } = decide({
       rules: ctx.rules,
       monthToDate: ctx.monthToDate,
       offer: live,
       size: opts.size ?? null,
+      profile: ctx.profile,
       place: ctx.place ? { id: opts.placeId, label: ctx.place.label } : null,
       knownStores: ctx.knownStores,
       paymentLinked: !!ctx.vaultId,
@@ -359,7 +365,7 @@ export async function startPurchase(
       retailerOrderStatus: RETAILER_ORDER_STATUS,
       source: opts.source,
       watchId: opts.watchId ?? null,
-      size: opts.size ?? null,
+      size,
       price: live.price,
       currency: live.currency,
       categoryPath: live.categoryPath,
@@ -440,6 +446,7 @@ export const approvePurchase = onCall<{ purchaseId: string }, Promise<PurchaseRe
         monthToDate: ctx.monthToDate,
         offer: live,
         size: cur.size,
+        profile: ctx.profile,
         place: ctx.place ? { id: cur.placeId, label: ctx.place.label } : null,
         knownStores: ctx.knownStores,
         paymentLinked: !!ctx.vaultId,

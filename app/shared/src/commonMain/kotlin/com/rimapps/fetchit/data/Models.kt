@@ -120,6 +120,17 @@ data class HouseRules(
     val askIfUnsureAboutSize: Boolean = true,
 )
 
+/** users/{uid}/profile/main (setProfile). Shoe sizes are "US 9" / "UK 8" / "EU 42". */
+@Serializable
+data class Profile(
+    val sizes: ProfileSizes = ProfileSizes(),
+    val askIfUnsure: Boolean? = null,
+    val dogName: String? = null,
+)
+
+@Serializable
+data class ProfileSizes(val top: String? = null, val waist: String? = null, val shoe: String? = null, val fit: String? = null)
+
 @Serializable
 data class UserDoc(val paypalLinked: Boolean = false, val paypalEmail: String? = null)
 
