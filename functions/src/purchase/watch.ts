@@ -1,4 +1,5 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { ENFORCE_APP_CHECK } from "../options.js";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { logger } from "firebase-functions";
 import { FieldValue, Timestamp, type DocumentReference } from "firebase-admin/firestore";
@@ -56,7 +57,7 @@ async function defaultPlaceId(uid: string): Promise<string> {
 
 /** Watch an offer from fetchItem/findSimilar; buy it through the house rules when it hits targetPrice. */
 export const watchOffer = onCall<{ offerId: string; targetPrice: number; size?: string; placeId?: string }>(
-  { secrets, cors: true },
+  { secrets, cors: true, enforceAppCheck: ENFORCE_APP_CHECK },
   async (request) => {
     const uid = requireUid(request.auth?.uid);
     const { offerId, targetPrice, size, placeId } = request.data ?? {};
@@ -173,7 +174,7 @@ export const checkWatches = onSchedule({ schedule: "every 60 minutes", secrets, 
 });
 
 /** "Check now" for the signed-in user's own watches (also how the emulator test runs a check on demand). */
-export const checkWatchesNow = onCall({ secrets, timeoutSeconds: 120, cors: true }, async (request) => {
+export const checkWatchesNow = onCall({ secrets, timeoutSeconds: 120, cors: true, enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const uid = requireUid(request.auth?.uid);
   return { results: await runWatchChecks(uid) };
 });

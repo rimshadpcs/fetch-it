@@ -1,6 +1,7 @@
 package com.rimapps.fetchit.data
 
 import com.rimapps.fetchit.platform.KeyValueStore
+import com.rimapps.fetchit.platform.appCheckToken
 import io.ktor.client.HttpClient
 import io.ktor.client.request.forms.submitForm
 import io.ktor.client.request.get
@@ -38,6 +39,9 @@ import kotlin.time.Instant
 
 /** A callable function failed: `status` is the Firebase code (FAILED_PRECONDITION, …), `message` is user-facing. */
 class FunctionsException(val status: String, override val message: String) : Exception(message)
+
+/** App Check token header, verified by callables (ENFORCE_APP_CHECK) and Firestore. */
+private const val APP_CHECK = "X-Firebase-AppCheck"
 
 val json = Json { ignoreUnknownKeys = true; explicitNulls = false; encodeDefaults = true }
 
@@ -110,6 +114,7 @@ class Firebase(private val http: HttpClient, private val store: KeyValueStore = 
     suspend fun call(name: String, data: JsonElement = JsonObject(emptyMap())): JsonElement {
         val res = retryUnsent { http.post("$functionsBase/$name") {
             header(HttpHeaders.Authorization, "Bearer ${token()}")
+            appCheckToken()?.let { header(APP_CHECK, it) }
             contentType(ContentType.Application.Json)
             setBody(buildJsonObject { put("data", data) }.toString())
         } }
@@ -122,8 +127,10 @@ class Firebase(private val http: HttpClient, private val store: KeyValueStore = 
     /** Streaming callable: each `message` chunk goes to [onChunk] as it arrives; returns the final `result`. */
     suspend fun stream(name: String, data: JsonElement, onChunk: suspend (JsonElement) -> Unit): JsonElement {
         val bearer = token()
+        val appCheck = appCheckToken()
         return retryUnsent { http.preparePost("$functionsBase/$name") {
             header(HttpHeaders.Authorization, "Bearer $bearer")
+            appCheck?.let { header(APP_CHECK, it) }
             header(HttpHeaders.Accept, "text/event-stream")
             contentType(ContentType.Application.Json)
             setBody(buildJsonObject { put("data", data) }.toString())
@@ -174,7 +181,10 @@ class Firebase(private val http: HttpClient, private val store: KeyValueStore = 
 
     /** One document as plain JSON (with `id`), or null if it doesn't exist. */
     suspend fun getDoc(path: String): JsonObject? {
-        val res = http.get("$firestoreBase/$path") { header(HttpHeaders.Authorization, "Bearer ${token()}") }
+        val res = http.get("$firestoreBase/$path") {
+            header(HttpHeaders.Authorization, "Bearer ${token()}")
+            appCheckToken()?.let { header(APP_CHECK, it) }
+        }
         if (res.status.value == 404) return null
         val body = json.parseToJsonElement(res.bodyAsText()).jsonObject
         if (!res.status.isSuccess()) throw FunctionsException("FIRESTORE", body["error"]?.jsonObject?.get("message")?.jsonPrimitive?.content ?: "Read failed")
@@ -184,6 +194,7 @@ class Firebase(private val http: HttpClient, private val store: KeyValueStore = 
     suspend fun listDocs(path: String, orderBy: String? = null, pageSize: Int = 100): List<JsonObject> {
         val res = http.get("$firestoreBase/$path") {
             header(HttpHeaders.Authorization, "Bearer ${token()}")
+            appCheckToken()?.let { header(APP_CHECK, it) }
             parameter("pageSize", pageSize)
             orderBy?.let { parameter("orderBy", it) }
         }

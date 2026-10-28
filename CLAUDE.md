@@ -408,6 +408,14 @@ Bottom nav: Fetch · Activity · Rules + round "+" (upload).
       Punto Jacquard Rayas"). So also `looksNonEnglish(title)` (foreign letters like ø/ñ, or non-English shop words
       such as rayas/punto/med) → `languageFactor` 0.3 in the final score (findSimilar: sorted last). 1 unit test
       (35 total). Emulator vs prod: outfit → 5 English titles; abercrombie.com buy → live check "In stock" → declined.
+- [~] App Check (Oct 28): wired, **not enforced yet**. `enforceAppCheck: ENFORCE_APP_CHECK` on all 16 callables
+      (param, false in .env.fetchit-437a0); app sends `X-Firebase-AppCheck` on callables + Firestore (debug provider in
+      debug builds, Play Integrity in release, by source set); fetchItem / registerPushToken log `appCheck`.
+      Verified: prod fetch from the debug build works and logs `appCheck: missing` (debug token not allow-listed, App
+      Check API off); forged token sent to prod → "AppCheck token was rejected" (allowed only because not enforced);
+      emulators with ENFORCE_APP_CHECK=true → no token = 401 (the emulator skips signature checks, so forged passes
+      there). Waiting on console registration (DEPLOY.md → App Check), then flip to true. Note: a sideloaded release
+      APK can't get Play Integrity tokens.
 - [ ] PayPal webhooks
 - [x] App, Android (Oct 26, Pixel_4 emulator against production): onboarding → fetch → results → buy/approve → activity.
       Firebase over plain REST from shared Kotlin (`shared/.../data/Firebase.kt`): **anonymous** sign-in (provider enabled

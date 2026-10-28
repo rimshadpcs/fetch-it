@@ -50,3 +50,6 @@ object PushOpens {
     /** The purchase whose approval sheet is showing: its notification isn't shown on top of it. */
     val onScreen = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
 }
+
+/** An App Check token for our backend (Play Integrity / debug provider on Android), or null if there isn't one. */
+expect suspend fun appCheckToken(): String?

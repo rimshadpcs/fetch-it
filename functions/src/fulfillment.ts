@@ -4,6 +4,7 @@
 // "Fetch It Demo Post" tracking.
 
 import { randomInt } from "node:crypto";
+import { ENFORCE_APP_CHECK } from "./options.js";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { defineInt } from "firebase-functions/params";
@@ -230,7 +231,7 @@ export function requireDebug() {
 }
 
 /** Fast-forward one of your orders to its next status (for filming). */
-export const advanceOrder = onCall<{ orderId: string }>({ secrets: fulfilmentSecrets, cors: true }, async (request) => {
+export const advanceOrder = onCall<{ orderId: string }>({ secrets: fulfilmentSecrets, cors: true, enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   requireDebug();
   const uid = requireUid(request.auth?.uid);
   const ref = orderRef(uid, validId(request.data?.orderId));
@@ -239,7 +240,7 @@ export const advanceOrder = onCall<{ orderId: string }>({ secrets: fulfilmentSec
 });
 
 /** Cancel before it ships: refund the sandbox capture, mark cancelled, roll back month-to-date spend. */
-export const cancelOrder = onCall<{ orderId: string }>({ secrets: fulfilmentSecrets, cors: true, timeoutSeconds: 60 }, async (request) => {
+export const cancelOrder = onCall<{ orderId: string }>({ secrets: fulfilmentSecrets, cors: true, enforceAppCheck: ENFORCE_APP_CHECK, timeoutSeconds: 60 }, async (request) => {
   const uid = requireUid(request.auth?.uid);
   const ref = orderRef(uid, validId(request.data?.orderId));
 

@@ -1,7 +1,7 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions";
 import { ANTHROPIC_API_KEY, CHANNEL3_API_KEY, FETCH_SIGNING_KEY, GEMINI_API_KEY } from "../config.js";
-import { DEMO_MIN_INSTANCES } from "../options.js";
+import { DEMO_MIN_INSTANCES, ENFORCE_APP_CHECK } from "../options.js";
 import type { DetectedItem } from "../lib/gemini.js";
 import { InvalidToken, sha256, sign, TOKEN_TTL_MS, verify, type ItemsClaim, type OfferClaim } from "../lib/sign.js";
 import { runFetch, type FetchEvent, type FetchResult, type RankedOffer } from "./pipeline.js";
@@ -53,7 +53,7 @@ export const fetchItem = onCall<FetchItemRequest, Promise<FetchItemResponse>, Fe
     secrets: [GEMINI_API_KEY, ANTHROPIC_API_KEY, CHANNEL3_API_KEY, FETCH_SIGNING_KEY],
     memory: "1GiB",
     timeoutSeconds: 60,
-    cors: true,
+    cors: true, enforceAppCheck: ENFORCE_APP_CHECK,
     minInstances: DEMO_MIN_INSTANCES,
   },
   async (request, response) => {
@@ -109,6 +109,8 @@ export const fetchItem = onCall<FetchItemRequest, Promise<FetchItemResponse>, Fe
     const signedItems = sign(key, { kind: "items", uid, photo, items: result.items, exp } satisfies ItemsClaim);
     logger.info("fetchItem", {
       uid,
+      // "valid" once the app sends App Check tokens that verify (enforcement rollout: DEPLOY.md → App Check).
+      appCheck: request.app ? "valid" : "missing",
       status: result.status,
       // Which Gemini model answered, and every attempt (hedge / overload fallback / low-confidence escalation).
       model: result.model,

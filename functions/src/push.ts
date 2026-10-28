@@ -2,6 +2,7 @@
 // (NEEDS_APPROVAL) and buys started by a price drop notify every registered device.
 
 import { createHash } from "node:crypto";
+import { ENFORCE_APP_CHECK } from "./options.js";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions";
 import { FieldValue } from "firebase-admin/firestore";
@@ -13,12 +14,13 @@ const devices = (uid: string) => userDoc(uid).collection("devices");
 const tokenId = (token: string) => createHash("sha256").update(token).digest("hex").slice(0, 32);
 
 /** The app sends its FCM token after sign-in and whenever FCM rotates it. */
-export const registerPushToken = onCall<{ token: string; platform: string }>({ cors: true }, async (request) => {
+export const registerPushToken = onCall<{ token: string; platform: string }>({ cors: true, enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const uid = requireUid(request.auth?.uid);
   const { token, platform } = request.data ?? {};
   if (typeof token !== "string" || token.length < 20 || token.length > 4096) throw new HttpsError("invalid-argument", "token is required.");
   if (platform !== "android" && platform !== "ios") throw new HttpsError("invalid-argument", "platform must be android or ios.");
   await devices(uid).doc(tokenId(token)).set({ token, platform, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  logger.info("push token registered", { uid, platform, appCheck: request.app ? "valid" : "missing" });
   return { registered: true };
 });
 

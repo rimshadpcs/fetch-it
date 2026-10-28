@@ -1,4 +1,5 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { ENFORCE_APP_CHECK } from "./options.js";
 import { FieldValue } from "firebase-admin/firestore";
 import { userDoc } from "./lib/db.js";
 import { profileRef, requireUid } from "./purchase/purchase.js";
@@ -14,7 +15,7 @@ const bool = (v: unknown, name: string) => {
 };
 
 /** Save the user's house rules (the app's Set house rules screen). Clients read them straight from Firestore. */
-export const setRules = onCall<Partial<HouseRules>>({ cors: true }, async (request) => {
+export const setRules = onCall<Partial<HouseRules>>({ cors: true, enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const uid = requireUid(request.auth?.uid);
   const d = request.data ?? {};
   const cats = d.allowedCategories;
@@ -49,7 +50,7 @@ const SIZE_PATTERNS = {
  * users/{uid}/profile/main straight from Firestore.
  */
 export const setProfile = onCall<{ sizes?: Record<string, string | null>; askIfUnsure?: boolean; dogName?: string }>(
-  { cors: true },
+  { cors: true, enforceAppCheck: ENFORCE_APP_CHECK },
   async (request) => {
     const uid = requireUid(request.auth?.uid);
     const d = request.data ?? {};

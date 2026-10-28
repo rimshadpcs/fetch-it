@@ -76,6 +76,37 @@ Everything runs with `minInstances: 0` (no idle cost; first call after idle is a
 2. Record. (A warm instance is billed while idle, `fetchItem` at 1 GiB.)
 3. **Turn it off afterwards:** set `DEMO_MIN_INSTANCES=0` and run the same deploy again.
 
+## App Check
+
+Every callable has `enforceAppCheck: ENFORCE_APP_CHECK` (param in `functions/.env.fetchit-437a0`, default `false`).
+The Android app sends an App Check token (`X-Firebase-AppCheck`) on every callable and Firestore request:
+Play Integrity in release builds, the debug provider in debug builds (`androidApp/src/{release,debug}`).
+
+| ENFORCE_APP_CHECK | No token | Invalid token | Valid token |
+|---|---|---|---|
+| `false` (now) | allowed | allowed, logged as a warning | allowed, `request.app` set |
+| `true` | 401 `unauthenticated` | 401 | allowed |
+
+Production verifies tokens with the Admin SDK (a forged token is logged "AppCheck token was rejected"). The
+functions **emulator** skips verification (`skipTokenVerification`): it only tells missing from present.
+
+Rollout:
+1. Enable the **Firebase App Check API** and the **Play Integrity API** in Cloud project fetchit-437a0.
+2. Firebase console → App Check → Apps → `com.rimapps.fetchit` → **Play Integrity** → register the SHA-256 of the
+   key that signs the APK people install: the release keystore's, or with Play App Signing the "App signing key
+   certificate" from Play Console → Test and release → App integrity. (Debug builds don't use Play Integrity.)
+3. Same screen → ⋮ → **Manage debug tokens** → add the debug build's token:
+   ```bash
+   adb logcat -d | grep -A1 "App Check debug token"
+   ```
+4. Check the logs show `appCheck: "valid"` (fetchItem's log line, `push token registered`) from both builds.
+5. Set `ENFORCE_APP_CHECK=true` in `functions/.env.fetchit-437a0` and `fb deploy --only functions --project fetchit-437a0`.
+
+**Sideloaded APKs:** Play Integrity only vouches for apps Google Play recognises (installed from Play, or the
+package listed in Play Console with the Cloud project linked). A sideloaded release APK gets no token, so with
+enforcement on it can't call the backend. Judges installing an APK need either a Play (internal testing) install or
+`ENFORCE_APP_CHECK=false`.
+
 ## Scheduled functions and logs
 
 | Function | Schedule | Does |

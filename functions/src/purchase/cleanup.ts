@@ -1,4 +1,5 @@
 import { onCall } from "firebase-functions/v2/https";
+import { ENFORCE_APP_CHECK } from "../options.js";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { logger } from "firebase-functions";
 import { Timestamp } from "firebase-admin/firestore";
@@ -52,7 +53,7 @@ export const sweepStuckPurchases = onSchedule({ schedule: "every 5 minutes", sec
 });
 
 /** Debug-only: run both sweeps now (emulator, or ALLOW_DEBUG=true). */
-export const runMaintenance = onCall({ secrets, cors: true, timeoutSeconds: 120 }, async (request) => {
+export const runMaintenance = onCall({ secrets, cors: true, enforceAppCheck: ENFORCE_APP_CHECK, timeoutSeconds: 120 }, async (request) => {
   requireDebug();
   requireUid(request.auth?.uid);
   return { stuck: await runStuckSweep(), orders: await runOrderSweep() };

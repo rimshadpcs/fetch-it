@@ -1,4 +1,5 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { ENFORCE_APP_CHECK } from "../options.js";
 import { logger } from "firebase-functions";
 import { CHANNEL3_API_KEY, FETCH_SIGNING_KEY } from "../config.js";
 import { Channel3, type C3Filters } from "../lib/channel3.js";
@@ -14,7 +15,7 @@ const MIN_RESULTS = 5;
  * fetchItem. Same category, age and department as the source, same dedupe and live-detail prices as fetchItem.
  */
 export const findSimilar = onCall<{ offerId: string; maxPrice?: number }>(
-  { secrets: [CHANNEL3_API_KEY, FETCH_SIGNING_KEY], timeoutSeconds: 30, cors: true },
+  { secrets: [CHANNEL3_API_KEY, FETCH_SIGNING_KEY], timeoutSeconds: 30, cors: true, enforceAppCheck: ENFORCE_APP_CHECK },
   async (request) => {
     const start = performance.now();
     const uid = requireUid(request.auth?.uid);

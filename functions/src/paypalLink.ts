@@ -3,6 +3,7 @@
 // The vault token stays server-side in vault/{uid}; the app only learns "linked" + email + suggested address.
 
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { ENFORCE_APP_CHECK } from "./options.js";
 import { logger } from "firebase-functions";
 import { FieldValue } from "firebase-admin/firestore";
 import { PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET } from "./config.js";
@@ -19,7 +20,7 @@ const secrets = [PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET];
 const linkRef = (setupTokenId: string) => db.collection("paypalLinks").doc(setupTokenId);
 
 /** Step 1: get an approval URL. The app opens it in a browser sheet; PayPal returns to fetchit://paypal/… */
-export const startPayPalLink = onCall({ secrets, cors: true }, async (request) => {
+export const startPayPalLink = onCall({ secrets, cors: true, enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const uid = requireUid(request.auth?.uid);
   const token = await clients()
     .paypal()
@@ -49,7 +50,7 @@ const toPlace = (fullName: string, a: PayPalAddress) => ({
  * Step 2, after the deep link returns: vault the approved setup token. `token` is the setupTokenId from step 1
  * (PayPal also puts it on the return URL as approval_token_id).
  */
-export const completePayPalLink = onCall<{ token: string }>({ secrets, cors: true }, async (request) => {
+export const completePayPalLink = onCall<{ token: string }>({ secrets, cors: true, enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const uid = requireUid(request.auth?.uid);
   const setupTokenId = request.data?.token;
   if (typeof setupTokenId !== "string" || !/^[A-Za-z0-9-]{6,64}$/.test(setupTokenId)) throw new HttpsError("invalid-argument", "token is required.");
@@ -112,7 +113,7 @@ export const completePayPalLink = onCall<{ token: string }>({ secrets, cors: tru
 });
 
 /** The app shows the suggested Home; the user confirms it (only then does it count as a saved place). */
-export const confirmPlace = onCall<{ placeId: string }>({ cors: true }, async (request) => {
+export const confirmPlace = onCall<{ placeId: string }>({ cors: true, enforceAppCheck: ENFORCE_APP_CHECK }, async (request) => {
   const uid = requireUid(request.auth?.uid);
   const placeId = request.data?.placeId;
   if (typeof placeId !== "string" || !/^[A-Za-z0-9_-]{1,40}$/.test(placeId)) throw new HttpsError("invalid-argument", "placeId is required.");

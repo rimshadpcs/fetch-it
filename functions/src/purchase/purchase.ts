@@ -17,7 +17,7 @@ import { notify } from "../push.js";
 import { decide, money, type Decision, type HouseRules, type Profile, type Reason } from "../rules.js";
 import { fetchLiveOffer, type LiveOffer } from "./live.js";
 import { placeDemoOrder } from "../fulfillment.js";
-import { DEMO_MIN_INSTANCES } from "../options.js";
+import { DEMO_MIN_INSTANCES, ENFORCE_APP_CHECK } from "../options.js";
 
 /** Seconds between "Fetched!" and the charge, while the app shows Undo. */
 export const UNDO_SECONDS = 5;
@@ -423,7 +423,7 @@ export async function startPurchase(
  * auto-buy waits out the undo window and charges; the final result carries the PayPal order id.
  */
 export const purchaseOffer = onCall<{ offerId: string; size?: string; placeId: string; requestId: string }, Promise<PurchaseResponse>, PurchaseResponse>(
-  { secrets, timeoutSeconds: 60, cors: true, minInstances: DEMO_MIN_INSTANCES },
+  { secrets, timeoutSeconds: 60, cors: true, enforceAppCheck: ENFORCE_APP_CHECK, minInstances: DEMO_MIN_INSTANCES },
   async (request, res) => {
     const uid = requireUid(request.auth?.uid);
     const { offerId, size, placeId, requestId } = request.data ?? {};
@@ -437,7 +437,7 @@ export const purchaseOffer = onCall<{ offerId: string; size?: string; placeId: s
 
 /** After the fingerprint on the device. Re-checks the live price and the hard rules, then charges right away. */
 export const approvePurchase = onCall<{ purchaseId: string }, Promise<PurchaseResponse>>(
-  { secrets, timeoutSeconds: 60, cors: true },
+  { secrets, timeoutSeconds: 60, cors: true, enforceAppCheck: ENFORCE_APP_CHECK },
   async (request) => {
     const uid = requireUid(request.auth?.uid);
     const ref = purchaseRef(uid, request.data?.purchaseId);
@@ -505,7 +505,7 @@ export const approvePurchase = onCall<{ purchaseId: string }, Promise<PurchaseRe
 
 /** Undo an auto-buy inside its window (nothing is charged), or decline a purchase waiting for approval. */
 export const undoPurchase = onCall<{ purchaseId: string }, Promise<PurchaseResponse>>(
-  { secrets: [], cors: true },
+  { secrets: [], cors: true, enforceAppCheck: ENFORCE_APP_CHECK },
   async (request) => {
     const uid = requireUid(request.auth?.uid);
     const ref = purchaseRef(uid, request.data?.purchaseId);

@@ -117,3 +117,13 @@ actual fun rememberNotificationPermission(): () -> Unit {
         }
     }
 }
+
+/**
+ * The SDK caches the token and refreshes it before it expires. Never blocks a request for long: if the provider
+ * can't attest (debug token not allow-listed, sideloaded build), the request goes without one and the backend
+ * decides (ENFORCE_APP_CHECK).
+ */
+actual suspend fun appCheckToken(): String? =
+    kotlinx.coroutines.withTimeoutOrNull(4_000) {
+        runCatching { com.google.firebase.appcheck.FirebaseAppCheck.getInstance().getAppCheckToken(false).await().token }.getOrNull()
+    }

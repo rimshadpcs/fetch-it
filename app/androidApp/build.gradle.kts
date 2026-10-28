@@ -16,6 +16,11 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.biometric) // brings FragmentActivity
 
+    // App Check: Play Integrity in release builds, the debug provider (allow-listed token) in debug builds only.
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.appcheck.playintegrity)
+    debugImplementation(libs.firebase.appcheck.debug)
+
     implementation(libs.compose.uiToolingPreview)
     debugImplementation(libs.compose.uiTooling)
 }

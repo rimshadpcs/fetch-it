@@ -91,6 +91,7 @@ kotlin {
             implementation(libs.androidx.exifinterface)
             implementation(project.dependencies.platform(libs.firebase.bom))
             implementation(libs.firebase.messaging)
+            implementation(libs.firebase.appcheck)
             implementation(libs.kotlinx.coroutines.playServices)
         }
         iosMain.dependencies {
