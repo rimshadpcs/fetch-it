@@ -48,6 +48,9 @@ actual class KeyValueStore actual constructor() {
 }
 
 actual fun httpClient(): HttpClient = HttpClient(OkHttp) {
+    // OkHttp silently re-sends a POST when a pooled connection drops mid-request: that duplicated fetchItem
+    // calls on Oct 26. purchaseOffer is idempotent now, but nothing should be sent twice behind our back.
+    engine { config { retryOnConnectionFailure(false) } }
     // fetchItem and purchaseOffer (5 s undo window + PayPal) can take a while; the functions time out at 60 s.
     install(HttpTimeout) { requestTimeoutMillis = 70_000; socketTimeoutMillis = 70_000 }
 }

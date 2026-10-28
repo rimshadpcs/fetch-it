@@ -58,16 +58,14 @@ import kotlin.time.ExperimentalTime
 fun BuyingScreen(app: AppState, screen: Screen.Buying) {
     var purchase by remember { mutableStateOf<Purchase?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(screen) {
+    LaunchedEffect(screen.requestId) {
         val place = app.homePlace ?: run { error = "Add a delivery address first."; return@LaunchedEffect }
         try {
-            val final = app.api.purchaseOffer(screen.offer.offerId, place.placeId, screen.size) { decision ->
-                app.remember(decision)
+            // Re-entering this screen joins the same call instead of starting another (AppState.buy).
+            val final = app.buy(screen.offer, place.placeId, screen.size, screen.requestId) { decision ->
                 if (decision.status == "needs_approval") app.replace(Screen.Approve(decision.purchaseId)) else purchase = decision
-            }
-            app.remember(final)
+            }.await()
             if (final.status != "needs_approval") purchase = final
-            app.refresh()
         } catch (e: Exception) {
             error = e.friendly()
         }

@@ -11,6 +11,7 @@ import { FieldValue, getFirestore, Timestamp } from "firebase-admin/firestore";
 import { sign } from "../lib/lib/sign.js";
 
 const PROJECT = "fetchit-437a0";
+const rid = () => crypto.randomUUID().replaceAll("-", ""); // one id per Buy (purchaseOffer idempotency)
 process.env.FIRESTORE_EMULATOR_HOST ??= "127.0.0.1:8080";
 process.env.FIREBASE_AUTH_EMULATOR_HOST ??= "127.0.0.1:9090";
 config({ path: new URL("../.env.local", import.meta.url).pathname, quiet: true });
@@ -63,7 +64,7 @@ const showOrder = (o) =>
 
 // ---------- A ----------
 console.log("A) Buy the lamp, then fast-forward its demo order");
-const a = await call("purchaseOffer", { offerId: lampOffer(), placeId: "home" });
+const a = await call("purchaseOffer", { offerId: lampOffer(), placeId: "home", requestId: rid() });
 console.log(`   purchase ${a.purchaseId}: ${a.status} · PayPal ${a.paypalOrderId}`);
 const placed = (await user.collection("orders").doc(a.purchaseId).get()).data();
 console.log(`   order created: ${placed.status} ${placed.retailerOrderId} · simulated ${placed.simulated} · $${placed.totalCents / 100} · ship to ${placed.shipTo.label} · promised ${placed.promisedDeliveryDate} · PayPal ${placed.paypalOrderId} / capture ${placed.paypalCaptureId}`);
@@ -77,7 +78,7 @@ console.log("   cancel after delivery →", (await call("cancelOrder", { orderId
 
 // ---------- B ----------
 console.log("\nB) Buy again, cancel before shipping");
-const b = await call("purchaseOffer", { offerId: lampOffer(), placeId: "home" });
+const b = await call("purchaseOffer", { offerId: lampOffer(), placeId: "home", requestId: rid() });
 console.log(`   purchase ${b.purchaseId}: ${b.status} · PayPal ${b.paypalOrderId} · month-to-date $${await spend()}`);
 showOrder(await call("advanceOrder", { orderId: b.purchaseId })); // confirmed
 const cancelled = await call("cancelOrder", { orderId: b.purchaseId });

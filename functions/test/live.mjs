@@ -10,6 +10,7 @@ import { createInterface } from "node:readline/promises";
 import sharp from "sharp";
 
 const PROJECT = "fetchit-437a0";
+const rid = () => crypto.randomUUID().replaceAll("-", ""); // one id per Buy (purchaseOffer idempotency)
 const FN = (name) => `https://us-central1-${PROJECT}.cloudfunctions.net/${name}`;
 const FS = `https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents`;
 const rl = createInterface({ input: process.stdin, output: process.stdout });
@@ -87,7 +88,7 @@ const readDoc = async (path) => {
 const listDocs = async (path) =>
   ((await (await fetch(`${FS}/${path}?pageSize=200&orderBy=createdAt`, { headers: { Authorization: `Bearer ${idToken}` } })).json()).documents ?? []).map((d) => obj(d.fields));
 const buyAndSettle = async (offer) => {
-  let p = await call("purchaseOffer", { offerId: offer.offerId, placeId: "home" });
+  let p = await call("purchaseOffer", { offerId: offer.offerId, placeId: "home", requestId: rid() });
   console.log(`    → ${p.decision}: ${p.reasons.filter((r) => !r.pass).map((r) => r.message).join("; ") || "all rules pass"}`);
   if (p.status === "needs_approval") {
     console.log("    (approving, as the fingerprint would)");

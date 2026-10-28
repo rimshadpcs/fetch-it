@@ -16,6 +16,8 @@ import com.rimapps.fetchit.data.Purchase
 import com.rimapps.fetchit.data.UserDoc
 import com.rimapps.fetchit.platform.KeyValueStore
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 
 sealed interface Screen {
@@ -35,7 +37,8 @@ sealed interface Screen {
     // Fetch flow
     data object WhichOne : Screen
     data object Results : Screen
-    data class Buying(val offer: Offer, val size: String?) : Screen
+    /** [requestId] is made once per Buy tap; see AppState.buy. */
+    data class Buying(val offer: Offer, val size: String?, val requestId: String) : Screen
     data class Approve(val purchaseId: String) : Screen
     data class Done(val purchaseId: String) : Screen
 }
@@ -143,8 +146,8 @@ class AppState(val scope: CoroutineScope, val api: FetchApi = FetchApi()) {
                 s.response = r
                 s.identified = r.items
                 when (r.status) {
-                    "choose" -> go(Screen.WhichOne)
-                    "results" -> go(Screen.Results)
+                    "choose" -> showWhenOn(Screen.Fetch, Screen.WhichOne)
+                    "results" -> showWhenOn(Screen.Fetch, Screen.Results)
                     else -> s.error = "I couldn't spot anything I can buy in that photo. Try a closer shot?"
                 }
             } catch (e: Exception) {
@@ -153,6 +156,15 @@ class AppState(val scope: CoroutineScope, val api: FetchApi = FetchApi()) {
                 s.loading = false
             }
         }
+    }
+
+    /**
+     * Results arrive asynchronously. Only open them if the user is still on the screen that asked for them;
+     * otherwise a new screen (with Buy where the nav bar was) would appear under a tap meant for something else.
+     * The Fetch screen shows a "ready" card instead.
+     */
+    private fun showWhenOn(expected: Screen, next: Screen) {
+        if (screen == expected) go(next)
     }
 
     /** After "Which one?": search the chosen item (reuses the signed items, so no second identify). */
@@ -165,7 +177,7 @@ class AppState(val scope: CoroutineScope, val api: FetchApi = FetchApi()) {
             try {
                 val r = api.fetchItem(s.photo, itemIndex = index, itemsToken = token)
                 s.response = r
-                if (r.status == "results") go(Screen.Results) else s.error = "Nothing to buy found for that one."
+                if (r.status == "results") showWhenOn(Screen.WhichOne, Screen.Results) else s.error = "Nothing to buy found for that one."
             } catch (e: Exception) {
                 s.error = e.friendly()
             } finally {
@@ -173,6 +185,18 @@ class AppState(val scope: CoroutineScope, val api: FetchApi = FetchApi()) {
             }
         }
     }
+
+    /**
+     * One Buy tap = one purchaseOffer call. The call runs in the app scope (leaving or re-entering the Buying
+     * screen can't start another), keyed by the tap's requestId, which the server also uses as the purchase id.
+     */
+    private val buys = mutableMapOf<String, Deferred<Purchase>>()
+    fun buy(offer: Offer, placeId: String, size: String?, requestId: String, onDecision: (Purchase) -> Unit): Deferred<Purchase> =
+        buys.getOrPut(requestId) {
+            scope.async {
+                api.purchaseOffer(offer.offerId, placeId, size, requestId) { onDecision(it); remember(it) }.also { remember(it); refresh() }
+            }
+        }
 
     fun remember(p: Purchase) { purchases.value = purchases.value + (p.purchaseId to p) }
 

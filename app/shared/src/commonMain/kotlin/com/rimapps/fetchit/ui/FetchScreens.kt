@@ -33,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.draw.rotate
@@ -45,6 +46,14 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -106,8 +115,22 @@ fun FetchScreen(app: AppState) {
             Segmented(listOf("Snap", "Upload"), mode, { it }, { mode = it }, Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 12.dp))
             Box(Modifier.fillMaxWidth().height(1.dp).background(Ink.Divider))
 
+            val ready = session?.response?.takeIf { !session.loading && session.error == null && it.status in setOf("results", "choose") }
             if (session != null && (session.loading || session.error != null)) {
                 SniffingView(app, Modifier.weight(1f))
+            } else if (ready != null) {
+                // Results came back while the user was on another tab: they open them, nothing pops up on its own.
+                Column(Modifier.weight(1f).padding(22.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    PaperNote(Modifier.fillMaxWidth()) {
+                        Text("I found something!", style = hand(28.sp))
+                        Text(
+                            if (ready.status == "choose") "${ready.items.size} things in your photo" else "${ready.offers.size} matches, prices checked",
+                            style = body(15.sp, color = Ink.Muted),
+                        )
+                    }
+                    PillButton("Show me", onClick = { app.go(if (ready.status == "choose") Screen.WhichOne else Screen.Results) })
+                    PillButton("Start over", dark = false, height = 52.dp, onClick = { app.session = null })
+                }
             } else if (mode == "Snap") {
                 Column(Modifier.weight(1f).padding(horizontal = 22.dp, vertical = 22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(
@@ -242,10 +265,12 @@ fun ResultsScreen(app: AppState) {
     val offer = picked?.takeIf { it in shown } ?: shown.firstOrNull()
     var size by remember(offer) { mutableStateOf(offer?.let { defaultSize(app, it) }) }
     val place = app.homePlace
-    // Results replace the Fetch screen while the user's thumb may still be on it (the "+" sits where Buy lands):
-    // ignore Buy taps until this screen has been visible for a moment.
+    // Buy only counts a press that starts after this screen has been on the display for a moment: a tap aimed
+    // at the screen underneath (the Fetch "+" sits where Buy lands) must never buy. Measured from the first
+    // draw, not composition, because a slow device can compose long before it shows anything.
+    var drawn by remember { mutableStateOf(false) }
     var armed by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { delay(800); armed = true }
+    LaunchedEffect(drawn) { if (drawn) { delay(800); armed = true } }
 
     Box(Modifier.fillMaxSize().dotted()) {
         Column(Modifier.fillMaxSize().padding(top = 56.dp)) {
@@ -314,7 +339,10 @@ fun ResultsScreen(app: AppState) {
                 }
                 Box(
                     Modifier.weight(1f).height(56.dp).clip(RoundedCornerShape(999.dp)).background(Ink.Ink)
-                        .clickable(enabled = armed && offer != null && place != null) { app.go(Screen.Buying(offer!!, size)) },
+                        .drawWithContent { drawContent(); drawn = true }
+                        .buyGesture(enabled = armed && offer != null && place != null) {
+                            app.go(Screen.Buying(offer!!, size, newRequestId()))
+                        },
                     contentAlignment = Alignment.Center,
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -326,6 +354,22 @@ fun ResultsScreen(app: AppState) {
         }
     }
 }
+
+/**
+ * A tap that only counts when the press *starts* while [enabled]: a finger already down when Buy appears or
+ * arms can't complete a purchase on release. Keeps button semantics for accessibility.
+ */
+private fun Modifier.buyGesture(enabled: Boolean, onBuy: () -> Unit): Modifier = this
+    .semantics { role = Role.Button; if (enabled) onClick { onBuy(); true } else disabled() }
+    .pointerInput(enabled) {
+        detectTapGestures(onPress = {
+            val armedAtPress = enabled
+            if (tryAwaitRelease() && armedAtPress) onBuy()
+        })
+    }
+
+@OptIn(ExperimentalUuidApi::class)
+private fun newRequestId() = Uuid.random().toHexString()
 
 /** The user's saved size, if this offer sells it in stock (otherwise none: the rules then ask). */
 private fun defaultSize(app: AppState, o: Offer): String? {

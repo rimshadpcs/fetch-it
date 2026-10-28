@@ -16,6 +16,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import { sign } from "../lib/lib/sign.js";
 
 const PROJECT = "fetchit-437a0";
+const rid = () => crypto.randomUUID().replaceAll("-", ""); // one id per Buy (purchaseOffer idempotency)
 process.env.FIRESTORE_EMULATOR_HOST ??= "127.0.0.1:8080";
 process.env.FIREBASE_AUTH_EMULATOR_HOST ??= "127.0.0.1:9090";
 config({ path: new URL("../.env.local", import.meta.url).pathname, quiet: true });
@@ -104,7 +105,7 @@ const orders = [];
 
 // ---------- 1. lamp: auto-buy ----------
 console.log(`\n${at()}  1) Lamp ~$42 at wayfair.com`);
-const lamp = await call("purchaseOffer", { offerId: offerToken("LtIyk1j", "wayfair.com", "Glass Mushroom Table Lamp"), placeId: "home" }, (c) =>
+const lamp = await call("purchaseOffer", { offerId: offerToken("LtIyk1j", "wayfair.com", "Glass Mushroom Table Lamp"), placeId: "home", requestId: rid() }, (c) =>
   console.log(`${at()}  streamed: ${c.decision} / ${c.status}, undo until +${((c.undoUntil - Date.now()) / 1000).toFixed(1)}s`),
 );
 show(lamp);
@@ -112,7 +113,7 @@ if (lamp.paypalOrderId) orders.push(lamp.paypalOrderId);
 
 // ---------- 2. throw: needs approval, then approve ----------
 console.log(`\n${at()}  2) Wool throw ~$129 at allmodern.com`);
-const throwBlanket = await call("purchaseOffer", { offerId: offerToken("BA51cDw", "allmodern.com", "Barina Wool Throw Blanket"), placeId: "home" });
+const throwBlanket = await call("purchaseOffer", { offerId: offerToken("BA51cDw", "allmodern.com", "Barina Wool Throw Blanket"), placeId: "home", requestId: rid() });
 show(throwBlanket);
 console.log(`${at()}  (user approves with fingerprint)`);
 const approved = await call("approvePurchase", { purchaseId: throwBlanket.purchaseId });
@@ -121,12 +122,12 @@ if (approved.paypalOrderId) orders.push(approved.paypalOrderId);
 
 // ---------- 3. earbuds: blocked ----------
 console.log(`\n${at()}  3) Earbuds at bestbuy.com (electronics)`);
-show(await call("purchaseOffer", { offerId: offerToken("1xETMWC", "bestbuy.com", "P31i Wireless Earbuds"), placeId: "home" }));
+show(await call("purchaseOffer", { offerId: offerToken("1xETMWC", "bestbuy.com", "P31i Wireless Earbuds"), placeId: "home", requestId: rid() }));
 
 // ---------- 4. lamp again: undo inside the window ----------
 console.log(`\n${at()}  4) Lamp again, then Undo after 1 s`);
 let undoResult;
-const second = await call("purchaseOffer", { offerId: offerToken("LtIyk1j", "wayfair.com", "Glass Mushroom Table Lamp"), placeId: "home" }, async (c) => {
+const second = await call("purchaseOffer", { offerId: offerToken("LtIyk1j", "wayfair.com", "Glass Mushroom Table Lamp"), placeId: "home", requestId: rid() }, async (c) => {
   console.log(`${at()}  streamed: ${c.decision} / ${c.status}`);
   await new Promise((r) => setTimeout(r, 1000));
   undoResult = await call("undoPurchase", { purchaseId: c.purchaseId });
@@ -139,10 +140,10 @@ console.log(`\n${at()}  5) Token checks`);
 const good = offerToken("LtIyk1j", "wayfair.com", "Glass Mushroom Table Lamp");
 const [body, sig] = good.split(".");
 const tampered = Buffer.from(JSON.stringify({ ...JSON.parse(Buffer.from(body, "base64url")), merchant: "evil.example" })).toString("base64url") + "." + sig;
-console.log("   tampered offerId →", (await call("purchaseOffer", { offerId: tampered, placeId: "home" })).error?.message);
+console.log("   tampered offerId →", (await call("purchaseOffer", { offerId: tampered, placeId: "home", requestId: rid() })).error?.message);
 const foreign = sign(process.env.FETCH_SIGNING_KEY, { kind: "offer", uid: "someone-else", productId: "LtIyk1j", merchant: "wayfair.com", color: null, title: "x", imageUrl: null, exp: Date.now() + 1e6 });
-console.log("   another user's offerId →", (await call("purchaseOffer", { offerId: foreign, placeId: "home" })).error?.message);
-console.log("   unsaved placeId →", (await call("purchaseOffer", { offerId: good, placeId: "office" })).reasons?.find((r) => r.rule === "saved_place")?.message);
+console.log("   another user's offerId →", (await call("purchaseOffer", { offerId: foreign, placeId: "home", requestId: rid() })).error?.message);
+console.log("   unsaved placeId →", (await call("purchaseOffer", { offerId: good, placeId: "office", requestId: rid() })).reasons?.find((r) => r.rule === "saved_place")?.message);
 const tiny = "/9j/4AAQSkZJRgABAQ"; // any bytes: the token is checked before the image is used
 console.log("   forged itemsToken →", (await call("fetchItem", { imageBase64: tiny, itemsToken: "e30.AAAA", itemIndex: 0 })).error?.message);
 

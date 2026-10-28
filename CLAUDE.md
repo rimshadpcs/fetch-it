@@ -79,7 +79,7 @@ KMP app ──Firebase Auth──▶ Cloud Functions (TypeScript)
 | `health` | liveness check (onRequest) |
 | `fetchItem` ✅ | photo → items in it ("Which one?") → top 5 offers for one item with live price, colour, sizes, stock (callable, streams) |
 | `agentTurn` | user message/voice text + context → agent reply, picks, actions |
-| `purchaseOffer` ✅ | `{offerId, size?, placeId}` → live price → rules → BLOCKED / NEEDS_APPROVAL (FCM placeholder) / AUTO_BUY (streams decision, 5 s undo, then vault charge) |
+| `purchaseOffer` ✅ | `{offerId, size?, placeId, requestId}` (requestId = one per Buy tap = purchase id; a repeat returns the same purchase and waits for its outcome) → live price → rules → BLOCKED / NEEDS_APPROVAL (FCM placeholder) / AUTO_BUY (streams decision, 5 s undo, then vault charge) |
 | `approvePurchase` ✅ | `{purchaseId}` after the fingerprint: re-checks live price + hard rules, charges right away |
 | `undoPurchase` ✅ | `{purchaseId}`: undo an auto-buy inside the window (nothing charged) or decline an approval |
 | `watchOffer` ✅ | `{offerId, targetPrice, size?, placeId?}` → `users/{uid}/watches/{id}` + Channel3 price tracking |
@@ -417,3 +417,18 @@ Bottom nav: Fetch · Activity · Rules + round "+" (upload).
       - With the lag, a scripted Undo read via uiautomator (~2–3 s per dump) missed the 5 s window; tapping straight away worked.
       - iOS actuals are stubs (photo picker, LocalAuthentication, ASWebAuthenticationSession); iOS not compiled yet.
       - No lock screen on the device → the "Approve with fingerprint" tap itself counts (BiometricManager can't authenticate).
+- [x] Stray-Buy fix (Oct 28). Two unintended buys on Oct 26: $367 BLOCKED (10:07:49Z) and $22.90 **charged**
+      (10:27:47Z, `5FT94904E0674090T`). Server logs: each purchaseOffer arrived as a tap meant for something else
+      landed on Buy — results had pushed the Results screen on top of another screen (Buy sits where the nav bar and
+      "+" are) while the slow emulator still drew the old frame. The second was preceded by two fetchItem requests
+      100 ms apart for one photo: OkHttp's silent POST retry (`retryOnConnectionFailure`, on by default).
+      Fixes: `purchaseOffer` requires a `requestId` (doc id; pre-check + re-check in the decision transaction; replays
+      of an in-flight purchase wait for the outcome; reuse for another offer → invalid-argument). App: one requestId
+      per tap, the call runs in AppState keyed by it (one tap = one call), OkHttp retries off and replaced by an
+      explicit retry only for requests that got no response, Results/Which one? only open if the user is still on
+      the screen that asked (else a "I found something!" card on Fetch), Buy arms 0.8 s after its first draw and only
+      a press that *starts* armed counts. `npm run test:idempotency` (emulators + sandbox): same Buy ×3 (2 concurrent +
+      1 after) → 1 purchase, 1 PayPal order, 1 spend reservation, all three responses `completed`; reused id and
+      missing id rejected. Emulator vs prod: switching to Rules mid-fetch + 6 taps where Buy would be → 0 purchase
+      calls; instant tap on a fresh Results ignored, later tap → exactly 1 call.
+      - The emulators need Java 21+: `JAVA_HOME=~/Library/Java/JavaVirtualMachines/jbr-21.0.5/Contents/Home`.

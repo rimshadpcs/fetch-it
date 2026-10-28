@@ -17,7 +17,9 @@ import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import io.ktor.http.parameters
 import io.ktor.utils.io.readUTF8Line
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.io.IOException
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -106,11 +108,11 @@ class Firebase(private val http: HttpClient, private val store: KeyValueStore = 
     // ---- Callable functions (https://firebase.google.com/docs/functions/callable-reference) ----
 
     suspend fun call(name: String, data: JsonElement = JsonObject(emptyMap())): JsonElement {
-        val res = http.post("$functionsBase/$name") {
+        val res = retryUnsent { http.post("$functionsBase/$name") {
             header(HttpHeaders.Authorization, "Bearer ${token()}")
             contentType(ContentType.Application.Json)
             setBody(buildJsonObject { put("data", data) }.toString())
-        }
+        } }
         val body = runCatching { json.parseToJsonElement(res.bodyAsText()).jsonObject }.getOrNull()
         body?.get("error")?.let { throw it.toFunctionsException() }
         if (!res.status.isSuccess() || body == null) throw FunctionsException("INTERNAL", "Something went wrong (${res.status.value}).")
@@ -120,12 +122,13 @@ class Firebase(private val http: HttpClient, private val store: KeyValueStore = 
     /** Streaming callable: each `message` chunk goes to [onChunk] as it arrives; returns the final `result`. */
     suspend fun stream(name: String, data: JsonElement, onChunk: suspend (JsonElement) -> Unit): JsonElement {
         val bearer = token()
-        return http.preparePost("$functionsBase/$name") {
+        return retryUnsent { http.preparePost("$functionsBase/$name") {
             header(HttpHeaders.Authorization, "Bearer $bearer")
             header(HttpHeaders.Accept, "text/event-stream")
             contentType(ContentType.Application.Json)
             setBody(buildJsonObject { put("data", data) }.toString())
         }.execute { res ->
+            it() // headers are in: from here on a failure is not "unsent"
             if (!res.status.isSuccess()) {
                 val body = runCatching { json.parseToJsonElement(res.bodyAsText()).jsonObject }.getOrNull()
                 throw body?.get("error")?.toFunctionsException() ?: FunctionsException("INTERNAL", "Something went wrong (${res.status.value}).")
@@ -141,7 +144,25 @@ class Firebase(private val http: HttpClient, private val store: KeyValueStore = 
                 event["result"]?.let { result = it }
             }
             result ?: throw FunctionsException("UNAVAILABLE", "The connection dropped. Check Activity for what happened.")
+        } }
+    }
+
+    /**
+     * Our one retry policy (OkHttp's silent one is off): re-send only when the connection failed before any
+     * response arrived, at most twice. Safe for every callable we have: purchaseOffer is idempotent on its
+     * requestId, approve/undo re-check the purchase state, the rest don't charge anything.
+     */
+    private suspend fun <T> retryUnsent(send: suspend (markReceived: () -> Unit) -> T): T {
+        repeat(2) { attempt ->
+            var received = false
+            try {
+                return send { received = true }
+            } catch (e: IOException) {
+                if (received) throw e
+                delay(400L * (attempt + 1))
+            }
         }
+        return send {}
     }
 
     private fun JsonElement.toFunctionsException(): FunctionsException {

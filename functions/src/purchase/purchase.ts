@@ -276,6 +276,11 @@ const response = (id: string, p: PurchaseDoc) => ({
 });
 export type PurchaseResponse = ReturnType<typeof response>;
 
+const IN_FLIGHT = new Set<PurchaseStatus>(["pending_undo", "approved", "charging"]);
+
+/** One id per Buy tap (it becomes the Firestore purchase id). */
+export const isRequestId = (v: unknown): v is string => typeof v === "string" && /^[A-Za-z0-9]{16,40}$/.test(v);
+
 export const secrets = [CHANNEL3_API_KEY, FETCH_SIGNING_KEY, PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET];
 export const requireUid = (uid: string | undefined) => {
   if (!uid) throw new HttpsError("unauthenticated", "Sign in first.");
@@ -294,13 +299,40 @@ export async function startPurchase(
     size?: string | null;
     source: "user" | "watch";
     watchId?: string;
+    /** Client-generated id for this one Buy tap; becomes the purchase id. A repeat returns the same purchase. */
+    requestId?: string;
     onDecision?: (r: PurchaseResponse) => unknown;
   },
 ): Promise<PurchaseResponse> {
-  const live: LiveOffer = await fetchLiveOffer(clients().c3(uid), claim);
-  const ref = userDoc(uid).collection("purchases").doc();
+  const purchases = userDoc(uid).collection("purchases");
+  const ref = opts.requestId ? purchases.doc(opts.requestId) : purchases.doc();
+  // A repeated request (double tap, client or transport retry) gets the purchase that already exists.
+  const replay = async (existing: PurchaseDoc) => {
+    if (existing.productId !== claim.productId || existing.merchant !== claim.merchant) {
+      throw new HttpsError("invalid-argument", "requestId was already used for a different purchase.");
+    }
+    logger.info("purchase replay", { uid, purchaseId: ref.id, status: existing.status });
+    await opts.onDecision?.(response(ref.id, existing));
+    // Still in flight (undo window or paying): wait for the original request to finish it, so a retry whose
+    // first response was lost still ends with the real outcome.
+    let cur = existing;
+    for (const until = Date.now() + 40_000; IN_FLIGHT.has(cur.status) && Date.now() < until; ) {
+      await new Promise((r) => setTimeout(r, 500));
+      cur = (await ref.get()).data() as PurchaseDoc;
+    }
+    return response(ref.id, cur);
+  };
+  if (opts.requestId) {
+    const before = await ref.get();
+    if (before.exists) return replay(before.data() as PurchaseDoc);
+  }
 
-  const p = await db.runTransaction(async (tx) => {
+  const live: LiveOffer = await fetchLiveOffer(clients().c3(uid), claim);
+
+  const decided = await db.runTransaction(async (tx) => {
+    // Re-checked inside the transaction: of two concurrent requests with the same id, only one creates it.
+    const existing = await tx.get(ref);
+    if (existing.exists) return { doc: existing.data() as PurchaseDoc, replayed: true };
     const ctx = await readContext(tx, uid, opts.placeId);
     const { decision, reasons } = decide({
       rules: ctx.rules,
@@ -345,8 +377,10 @@ export async function startPurchase(
     tx.set(ref, doc);
     if (decision === "AUTO_BUY") reserve(tx, uid, ctx.month, live.price!, live.currency);
     logActivity(tx, uid, ref.id, doc);
-    return doc;
+    return { doc, replayed: false };
   });
+  if (decided.replayed) return replay(decided.doc);
+  const p = decided.doc;
 
   logger.info("purchase decision", { uid, purchaseId: ref.id, source: opts.source, decision: p.decision, price: p.price });
   await opts.onDecision?.(response(ref.id, p));
@@ -371,15 +405,16 @@ export async function startPurchase(
  * Buy an offer from fetchItem. Streams the decision immediately (so the app can show Undo), then for an
  * auto-buy waits out the undo window and charges; the final result carries the PayPal order id.
  */
-export const purchaseOffer = onCall<{ offerId: string; size?: string; placeId: string }, Promise<PurchaseResponse>, PurchaseResponse>(
+export const purchaseOffer = onCall<{ offerId: string; size?: string; placeId: string; requestId: string }, Promise<PurchaseResponse>, PurchaseResponse>(
   { secrets, timeoutSeconds: 60, cors: true, minInstances: DEMO_MIN_INSTANCES },
   async (request, res) => {
     const uid = requireUid(request.auth?.uid);
-    const { offerId, size, placeId } = request.data ?? {};
+    const { offerId, size, placeId, requestId } = request.data ?? {};
     if (typeof placeId !== "string" || !placeId) throw new HttpsError("invalid-argument", "placeId is required.");
     if (size !== undefined && typeof size !== "string") throw new HttpsError("invalid-argument", "size must be a string.");
+    if (!isRequestId(requestId)) throw new HttpsError("invalid-argument", "requestId is required: 16–40 letters and digits, new for each Buy tap.");
     const claim = verifyOffer(offerId, uid);
-    return startPurchase(uid, claim, { placeId, size, source: "user", onDecision: (r) => res?.sendChunk(r) });
+    return startPurchase(uid, claim, { placeId, size, requestId, source: "user", onDecision: (r) => res?.sendChunk(r) });
   },
 );
 
