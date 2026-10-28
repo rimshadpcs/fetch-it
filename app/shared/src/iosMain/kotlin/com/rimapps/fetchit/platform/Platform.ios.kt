@@ -33,3 +33,10 @@ actual fun rememberPhotoSource(onPhoto: (ByteArray) -> Unit): PhotoSource = reme
 // TODO(iOS): LocalAuthentication (LAContext.evaluatePolicy) for Face ID / Touch ID.
 @Composable
 actual fun rememberApprover(): Approver = remember { Approver { _, _, onResult -> onResult(true) } }
+
+// TODO(iOS): APNs via FirebaseMessaging (needs the APNs key in the Firebase console).
+actual suspend fun pushToken(): String? = null
+actual val platformName: String = "ios"
+
+@Composable
+actual fun rememberNotificationPermission(): () -> Unit = remember { {} }

@@ -17,6 +17,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import com.rimapps.fetchit.platform.PushOpens
 import com.rimapps.fetchit.ui.AccountScreen
 import com.rimapps.fetchit.ui.ActivityScreen
 import com.rimapps.fetchit.ui.ApproveScreen
@@ -41,7 +42,14 @@ fun App(register: ((() -> Boolean) -> Unit)? = null) {
     val app = remember { AppState(scope) }
     LaunchedEffect(Unit) {
         register?.invoke { app.back() }
-        if (app.api.firebase.signedIn) app.refresh()
+        if (app.api.firebase.signedIn) {
+            app.refresh()
+            if (app.onboarded) app.registerPush()
+        }
+    }
+    // A tapped "Needs your OK" / price-drop notification.
+    LaunchedEffect(Unit) {
+        PushOpens.pending.collect { open -> if (open != null) { PushOpens.pending.value = null; app.openFromPush(open) } }
     }
     FetchTheme {
         Box(Modifier.fillMaxSize()) {

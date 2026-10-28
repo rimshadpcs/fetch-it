@@ -13,6 +13,7 @@ import { Channel3 } from "../lib/channel3.js";
 import { db, monthKey, userDoc } from "../lib/db.js";
 import { PayPal, PayPalError, type ShippingAddress } from "../lib/paypal.js";
 import { InvalidToken, verify, type OfferClaim } from "../lib/sign.js";
+import { notify } from "../push.js";
 import { decide, money, type Decision, type HouseRules, type Profile, type Reason } from "../rules.js";
 import { fetchLiveOffer, type LiveOffer } from "./live.js";
 import { placeDemoOrder } from "../fulfillment.js";
@@ -391,15 +392,25 @@ export async function startPurchase(
   logger.info("purchase decision", { uid, purchaseId: ref.id, source: opts.source, decision: p.decision, price: p.price });
   await opts.onDecision?.(response(ref.id, p));
 
+  const price = money(p.price ?? 0, p.currency);
+  const why = p.reasons.filter((r) => !r.pass).map((r) => r.message).join(" · ");
   if (p.status === "needs_approval") {
-    // TODO(FCM): push "Needs your OK" to the user's devices.
-    logger.info("FCM placeholder: Needs your OK", {
-      uid,
+    await notify(uid, {
+      title: opts.source === "watch" ? `Price dropped: ${p.title} · ${price}` : `Needs your OK: ${p.title} · ${price}`,
+      body: why,
+      open: "approve",
       purchaseId: ref.id,
-      title: `${p.title} · ${money(p.price ?? 0, p.currency)}`,
-      body: p.reasons.filter((r) => !r.pass).map((r) => r.message).join(" · "),
     });
     return response(ref.id, p);
+  }
+  if (opts.source === "watch") {
+    // Nobody is looking at the app when a watch fires: say what happened either way.
+    await notify(uid, {
+      title: `Price dropped: ${p.title} · ${price}`,
+      body: p.status === "pending_undo" ? "Fetching it now, inside your house rules." : `Not bought: ${why}`,
+      open: "purchase",
+      purchaseId: ref.id,
+    });
   }
   if (p.status !== "pending_undo") return response(ref.id, p);
 

@@ -31,3 +31,22 @@ class Approver(val approve: (title: String, subtitle: String, onResult: (Boolean
 
 @Composable
 expect fun rememberApprover(): Approver
+
+/** This device's push token (FCM on Android), or null when push isn't available. */
+expect suspend fun pushToken(): String?
+
+/** "android" / "ios", for registerPushToken. */
+expect val platformName: String
+
+/** Asks for permission to show notifications (Android 13+); does nothing where it isn't needed. */
+@Composable
+expect fun rememberNotificationPermission(): () -> Unit
+
+/** A tapped notification asks the app to open a purchase: `approve` → the approval sheet, `purchase` → its outcome. */
+data class PushOpen(val open: String, val purchaseId: String)
+
+object PushOpens {
+    val pending = kotlinx.coroutines.flow.MutableStateFlow<PushOpen?>(null)
+    /** The purchase whose approval sheet is showing: its notification isn't shown on top of it. */
+    val onScreen = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+}

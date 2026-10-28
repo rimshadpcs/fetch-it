@@ -23,6 +23,8 @@ val generateFirebaseConfig by tasks.registering {
         val projectId = (json["project_info"] as Map<String, Any?>)["project_id"] as String
         val client = (json["client"] as List<Map<String, Any?>>).first()
         val apiKey = ((client["api_key"] as List<Map<String, Any?>>).first())["current_key"] as String
+        val appId = (client["client_info"] as Map<String, Any?>)["mobilesdk_app_id"] as String
+        val senderId = (json["project_info"] as Map<String, Any?>)["project_number"] as String
         val out = File(outDir, "com/rimapps/fetchit/data/FirebaseConfig.kt")
         out.parentFile.mkdirs()
         out.writeText(
@@ -33,6 +35,9 @@ val generateFirebaseConfig by tasks.registering {
             |internal object FirebaseConfig {
             |    const val PROJECT_ID = "$projectId"
             |    const val API_KEY = "$apiKey"
+            |    /** Android app id and FCM sender, for initializing the native Firebase SDK (messaging, App Check). */
+            |    const val ANDROID_APP_ID = "$appId"
+            |    const val SENDER_ID = "$senderId"
             |    const val REGION = "us-central1"
             |}
             |""".trimMargin()
@@ -84,6 +89,9 @@ kotlin {
             implementation(libs.androidx.biometric)
             implementation(libs.androidx.browser)
             implementation(libs.androidx.exifinterface)
+            implementation(project.dependencies.platform(libs.firebase.bom))
+            implementation(libs.firebase.messaging)
+            implementation(libs.kotlinx.coroutines.playServices)
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)

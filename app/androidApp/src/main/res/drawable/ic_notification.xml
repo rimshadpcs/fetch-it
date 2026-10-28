@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Monochrome dog face (the mascot's head) for the status bar. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="80"
+    android:viewportHeight="70">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M20 32 C19 15 61 15 60 32 C62 49 52 61 40 61 C28 61 18 49 20 32 Z M23 22 C10 16 3 30 7 43 C10 49 18 44 21 33 Z M57 22 C70 16 77 30 73 43 C70 49 62 44 59 33 Z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M29 35 a3 3 0 1 0 6 0 a3 3 0 1 0 -6 0 Z M45 35 a4 4 0 1 0 8 0 a4 4 0 1 0 -8 0 Z M36 45 a4 3 0 1 0 8 0 a4 3 0 1 0 -8 0 Z" />
+</vector>

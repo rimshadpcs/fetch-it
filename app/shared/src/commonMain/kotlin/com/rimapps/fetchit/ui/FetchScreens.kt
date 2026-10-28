@@ -63,6 +63,7 @@ import com.rimapps.fetchit.AppState
 import com.rimapps.fetchit.Screen
 import com.rimapps.fetchit.data.Offer
 import com.rimapps.fetchit.platform.PhotoSource
+import com.rimapps.fetchit.platform.rememberNotificationPermission
 import com.rimapps.fetchit.platform.rememberPhotoSource
 
 @Composable
@@ -97,6 +98,9 @@ fun MainScaffold(app: AppState, photos: PhotoSource = rememberPhotoSource { app.
 fun FetchScreen(app: AppState) {
     val photos = rememberPhotoSource { app.startFetch(it) }
     var mode by remember { mutableStateOf("Snap") }
+    // "Needs your OK" arrives as a notification: ask once, the first time the user lands here.
+    val askNotifications = rememberNotificationPermission()
+    LaunchedEffect(Unit) { if (!app.askedPush) { app.askedPush = true; askNotifications() } }
     val session = app.session
     MainScaffold(app, photos) {
         Column(Modifier.fillMaxSize()) {

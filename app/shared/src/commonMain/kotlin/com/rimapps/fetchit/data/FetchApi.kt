@@ -3,6 +3,7 @@ package com.rimapps.fetchit.data
 import com.rimapps.fetchit.platform.httpClient
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.encodeToJsonElement
@@ -78,11 +79,19 @@ class FetchApi(val firebase: Firebase = Firebase(httpClient())) {
     suspend fun undoPurchase(purchaseId: String): Purchase =
         firebase.call("undoPurchase", buildJsonObject { put("purchaseId", purchaseId) }).to()
 
+    suspend fun registerPushToken(token: String, platform: String) {
+        firebase.call("registerPushToken", buildJsonObject { put("token", token); put("platform", platform) })
+    }
+
     // ---- Reads (Firestore, own documents only) ----
     private fun users() = "users/${firebase.uid}"
 
     suspend fun user(): UserDoc = firebase.getDoc(users())?.to() ?: UserDoc()
     suspend fun rules(): HouseRules? = firebase.getDoc("${users()}/settings/rules")?.to()
+    /** A purchase document (e.g. opened from a notification), in the shape the purchase callables return. */
+    suspend fun purchase(purchaseId: String): Purchase? =
+        firebase.getDoc("${users()}/purchases/$purchaseId")?.let { JsonObject(it + ("purchaseId" to JsonPrimitive(purchaseId))).to() }
+
     suspend fun profile(): Profile? = firebase.getDoc("${users()}/profile/main")?.to()
     suspend fun places(): List<Place> =
         firebase.listDocs("${users()}/places").map { it.withPlaceId().to() }

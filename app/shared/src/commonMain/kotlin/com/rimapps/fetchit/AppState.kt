@@ -17,6 +17,9 @@ import com.rimapps.fetchit.data.ProfileSizes
 import com.rimapps.fetchit.data.Purchase
 import com.rimapps.fetchit.data.UserDoc
 import com.rimapps.fetchit.platform.KeyValueStore
+import com.rimapps.fetchit.platform.PushOpen
+import com.rimapps.fetchit.platform.platformName
+import com.rimapps.fetchit.platform.pushToken
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
@@ -130,6 +133,7 @@ class AppState(val scope: CoroutineScope, val api: FetchApi = FetchApi()) {
         store.set("onboarded", "1")
         reset(Screen.Fetch)
         refresh()
+        registerPush()
     }
 
     fun signOut() {
@@ -153,6 +157,24 @@ class AppState(val scope: CoroutineScope, val api: FetchApi = FetchApi()) {
             monthToDate = api.monthToDate()
         }
     }
+
+    /** After sign-in: tell the backend where to push "Needs your OK". */
+    fun registerPush() = scope.launch {
+        runCatching { pushToken()?.let { api.registerPushToken(it, platformName) } }
+    }
+
+    /** A tapped notification: the approval sheet, or the purchase's outcome. */
+    fun openFromPush(p: PushOpen) = scope.launch {
+        if (!api.firebase.signedIn) return@launch
+        runCatching { api.purchase(p.purchaseId) }.getOrNull()?.let(::remember)
+        refreshActivity()
+        val target = if (p.open == "approve" && purchases.value[p.purchaseId]?.status == "needs_approval") Screen.Approve(p.purchaseId) else Screen.Done(p.purchaseId)
+        if (purchases.value[p.purchaseId] != null) { reset(Screen.Activity); go(target) }
+    }
+
+    var askedPush: Boolean
+        get() = store.get("askedPush") == "1"
+        set(v) = store.set("askedPush", if (v) "1" else null)
 
     fun refreshActivity() = scope.launch { runCatching { activity = api.activity(); monthToDate = api.monthToDate() } }
 

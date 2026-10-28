@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,6 +47,7 @@ import com.rimapps.fetchit.AppState
 import com.rimapps.fetchit.Screen
 import com.rimapps.fetchit.data.Purchase
 import com.rimapps.fetchit.friendly
+import com.rimapps.fetchit.platform.PushOpens
 import com.rimapps.fetchit.platform.rememberApprover
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -243,6 +245,10 @@ fun ApproveScreen(app: AppState, screen: Screen.Approve) {
     val scope = rememberCoroutineScope()
     val approver = rememberApprover()
     val p = app.purchase(screen.purchaseId) ?: return
+    DisposableEffect(p.purchaseId) {
+        PushOpens.onScreen.value = p.purchaseId
+        onDispose { if (PushOpens.onScreen.value == p.purchaseId) PushOpens.onScreen.value = null }
+    }
     var busy by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     val pulse by rememberInfiniteTransition(label = "pulse").animateFloat(1f, 1.04f, infiniteRepeatable(tween(800), RepeatMode.Reverse), label = "s")

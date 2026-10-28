@@ -87,6 +87,7 @@ KMP app ──Firebase Auth──▶ Cloud Functions (TypeScript)
 | `checkWatchesNow` ✅ | callable "check now" for the caller's own watches (how the emulator test runs a check) |
 | `findSimilar` ✅ | `{offerId, maxPrice?}`: "More like this" / "Find cheaper" via Channel3 `/v1/similar`, signed offers |
 | `setRules` | update house rules (reads come straight from Firestore) |
+| `registerPushToken` ✅ | `{token, platform}` → `users/{uid}/devices/{sha256(token)[:32]}`; dead tokens are removed when FCM rejects them |
 | `setProfile` ✅ | `{sizes?: {top, waist, shoe, fit}, askIfUnsure?, dogName?}` → `users/{uid}/profile/main` (only the fields sent; null clears a size); ask-if-unsure mirrored with the rules doc both ways |
 | `startPayPalLink` ✅ | onboarding: Vault v3 setup token → approval URL; returns to `fetchit://paypal/return` / `…/cancel` |
 | `completePayPalLink` ✅ | `{token}` (setup token id): vault it, store token in `vault/{uid}` only, suggest PayPal's shipping address as Home, `users/{uid}.paypalLinked = true`. Nothing charged |
@@ -400,7 +401,7 @@ Bottom nav: Fetch · Activity · Rules + round "+" (upload).
       visual lamp match ($367) can drop to #2 behind a $99 look-alike; widening the no-penalty band to ¼–4× would
       keep it #1. 6 ranking unit tests (29 total).
 - [ ] Channel3 sometimes returns non-English listing titles (a Zara polo in Norwegian): set country/language on searches.
-- [ ] FCM for "Needs your OK" (placeholder logs today) · PayPal link flow functions · webhooks · refunds
+- [ ] PayPal webhooks
 - [x] App, Android (Oct 26, Pixel_4 emulator against production): onboarding → fetch → results → buy/approve → activity.
       Firebase over plain REST from shared Kotlin (`shared/.../data/Firebase.kt`): **anonymous** sign-in (provider enabled
       in fetchit-437a0; PayPal is the real identity), callable functions incl. SSE streaming (fetchItem `items` chunk →
@@ -443,3 +444,12 @@ Bottom nav: Fetch · Activity · Rules + round "+" (upload).
       set to Rex on the phone → back to Biscuit after the start-up refresh.
       - A brand-new callable answered 401 ("not authorized to invoke this service") for ~2 min after its first
         deploy: the allUsers invoker binding lags behind creation. Wait, or redeploy, before testing a new function.
+- [x] Push (Oct 28): FCM on Android via the native SDK only for messaging (FirebaseApp initialized in
+      `FetchApplication` from the generated config: no google-services plugin). The app registers its token after
+      onboarding/start (`registerPushToken`), asks for POST_NOTIFICATIONS once on the Fetch screen. `push.ts notify()`
+      (best effort, never fails a purchase): NEEDS_APPROVAL → "Needs your OK: <title> · $X" (watch: "Price dropped: …"),
+      tap opens the approval sheet; other watch outcomes → "Price dropped: …" with the result, tap opens the purchase.
+      Channel `approvals`, dog-face status icon; a notification for the purchase whose sheet is open isn't shown.
+      Emulator vs prod (watch docs `pushtest`, `pushtest2` written for the test user, checkWatches force-run from Cloud
+      Scheduler): app in background → notification → tap → approval sheet; app killed → tap cold-starts into the
+      sheet; in-app Buy needing approval → push sent (log `push sent`) but not shown over the sheet. All declined.
