@@ -2,6 +2,7 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions";
 import { ANTHROPIC_API_KEY, CHANNEL3_API_KEY, FETCH_SIGNING_KEY, GEMINI_API_KEY } from "../config.js";
 import { DEMO_MIN_INSTANCES, ENFORCE_APP_CHECK } from "../options.js";
+import { rateLimit, requireServices, tripped } from "../limits.js";
 import type { DetectedItem } from "../lib/gemini.js";
 import { InvalidToken, sha256, sign, TOKEN_TTL_MS, verify, type ItemsClaim, type OfferClaim } from "../lib/sign.js";
 import { runFetch, type FetchEvent, type FetchResult, type RankedOffer } from "./pipeline.js";
@@ -87,11 +88,17 @@ export const fetchItem = onCall<FetchItemRequest, Promise<FetchItemResponse>, Fe
       }
     }
 
+    // Credits: the user's hourly/daily fetches, then today's global caps. A follow-up with an itemsToken skips
+    // identify, so it only needs Channel3. Claude over its cap → Gemini alone.
+    await rateLimit(uid, "fetchItem");
+    await requireServices(uid, items ? ["channel3"] : ["gemini", "channel3"]);
+    const claudeOff = !items && (await tripped("claude"));
+
     let result: FetchResult;
     try {
       result = await runFetch(image, {
         geminiKey: GEMINI_API_KEY.value(),
-        anthropicKey: ANTHROPIC_API_KEY.value() || undefined,
+        anthropicKey: (!claudeOff && ANTHROPIC_API_KEY.value()) || undefined,
         channel3Key: CHANNEL3_API_KEY.value(),
         userId: uid,
         itemIndex,

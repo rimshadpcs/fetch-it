@@ -1,4 +1,5 @@
 import { GoogleGenAI, MediaResolution, ThinkingLevel, type GenerateContentConfig } from "@google/genai";
+import { meter } from "./meter.js";
 
 /** Normalized 0–1 box, origin top-left. */
 export interface Box {
@@ -129,6 +130,7 @@ export interface IdentifyResult {
 /** One Gemini call (no retries, no hedging). `signal` lets a race abort it. */
 export async function callGemini(apiKey: string, jpeg: Buffer, m: GeminiModel, signal?: AbortSignal) {
   const ai = new GoogleGenAI({ apiKey });
+  meter.record("gemini");
   const res = await ai.models.generateContent({
     model: m.model,
     contents: [{ inlineData: { mimeType: "image/jpeg", data: jpeg.toString("base64") } }, { text: PROMPT }],

@@ -2,6 +2,7 @@
 // so the pipeline can swap or race them. Strict tool use gives schema-valid JSON.
 import Anthropic from "@anthropic-ai/sdk";
 import { itemSchema, PROMPT, toItems, type AttemptTrace, type IdentifyResult, type RawItem } from "./gemini.js";
+import { meter } from "./meter.js";
 
 export const CLAUDE_IDENTIFY_MODEL = "claude-haiku-5-5";
 const MAX_ITEMS = 6;
@@ -64,6 +65,7 @@ export async function identifyWithClaude(
 ): Promise<IdentifyResult & { ms: number }> {
   const client = new Anthropic({ apiKey, maxRetries: 1, timeout: TIMEOUT_MS });
   const began = performance.now();
+  meter.record("claude");
   const res = await client.messages.create({
     model,
     max_tokens: 4096,

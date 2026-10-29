@@ -18,6 +18,7 @@ import { decide, money, type Decision, type HouseRules, type Profile, type Reaso
 import { fetchLiveOffer, type LiveOffer } from "./live.js";
 import { placeDemoOrder } from "../fulfillment.js";
 import { DEMO_MIN_INSTANCES, ENFORCE_APP_CHECK } from "../options.js";
+import { rateLimit } from "../limits.js";
 
 /** Seconds between "Fetched!" and the charge, while the app shows Undo. */
 export const UNDO_SECONDS = 5;
@@ -431,6 +432,7 @@ export const purchaseOffer = onCall<{ offerId: string; size?: string; placeId: s
     if (size !== undefined && typeof size !== "string") throw new HttpsError("invalid-argument", "size must be a string.");
     if (!isRequestId(requestId)) throw new HttpsError("invalid-argument", "requestId is required: 16–40 letters and digits, new for each Buy tap.");
     const claim = verifyOffer(offerId, uid);
+    await rateLimit(uid, "purchaseOffer");
     return startPurchase(uid, claim, { placeId, size, requestId, source: "user", onDecision: (r) => res?.sendChunk(r) });
   },
 );

@@ -1,5 +1,6 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { ENFORCE_APP_CHECK } from "../options.js";
+import { rateLimit, requireServices } from "../limits.js";
 import { logger } from "firebase-functions";
 import { CHANNEL3_API_KEY, FETCH_SIGNING_KEY } from "../config.js";
 import { Channel3, type C3Filters } from "../lib/channel3.js";
@@ -24,7 +25,9 @@ export const findSimilar = onCall<{ offerId: string; maxPrice?: number }>(
       throw new HttpsError("invalid-argument", "maxPrice must be a positive number.");
     }
     const claim = verifyOffer(offerId, uid);
-    const c3 = new Channel3(CHANNEL3_API_KEY.value(), uid);
+    await rateLimit(uid, "findSimilar");
+    await requireServices(uid, ["channel3"]);
+    const c3 =new Channel3(CHANNEL3_API_KEY.value(), uid);
 
     // The source as it is now, at the store the user saw it: its category, age, department, live price.
     const source = await c3.product(claim.productId, claim.color ? { [claim.color.option]: claim.color.label } : {}, [claim.merchant]);

@@ -1,4 +1,5 @@
 // Channel3 REST client (docs.trychannel3.com). Only the fields we use are typed.
+import { meter } from "./meter.js";
 
 const BASE = "https://api.trychannel3.com";
 
@@ -92,11 +93,14 @@ export class Channel3 {
   }
 
   // limit 10: ~1.1 s and steady; limit 20 swings 1.4–3.6 s. We only show the top 5.
+  // Search, image search and similar cost credits (metered for the daily cap); product detail is free.
   textSearch(query: string, filters: C3Filters = {}, limit = 10) {
+    meter.record("channel3");
     return this.call<C3SearchResponse>("/v1/search", { query, limit, filters: withDefaults(filters), config: LOCALE });
   }
 
   imageSearch(jpeg: Buffer, filters: C3Filters = {}, limit = 10) {
+    meter.record("channel3");
     return this.call<C3SearchResponse>("/v1/image-search", {
       base64_image: jpeg.toString("base64"),
       limit,
@@ -107,6 +111,7 @@ export class Channel3 {
 
   /** Nearest neighbours of a catalog product ("More like this" / "Find cheaper"). Same filters as search. */
   similar(productId: string, filters: C3Filters = {}, limit = 10) {
+    meter.record("channel3");
     return this.call<C3SearchResponse>("/v1/similar", { product_id: productId, limit, filters: withDefaults(filters), config: LOCALE });
   }
 
