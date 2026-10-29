@@ -81,6 +81,12 @@ Everything runs with `minInstances: 0` (no idle cost; first call after idle is a
 Every callable has `enforceAppCheck: ENFORCE_APP_CHECK` (param in `functions/.env.fetchit-437a0`, default `false`).
 The Android app sends an App Check token (`X-Firebase-AppCheck`) on every callable and Firestore request:
 Play Integrity in release builds, the debug provider in debug builds (`androidApp/src/{release,debug}`).
+After a failed token fetch the app stops asking for 5 minutes, so a build without tokens isn't slowed down.
+
+**Decision (Oct 29): `ENFORCE_APP_CHECK=false` through judging.** Judges sideload the APK, and Play Integrity only
+vouches for apps Google Play recognises (installed from Play, or listed in Play Console with the Cloud project
+linked), so a sideloaded release APK gets no token. Credits are protected by rate limits and a daily circuit
+breaker instead (see **Credit protection**).
 
 | ENFORCE_APP_CHECK | No token | Invalid token | Valid token |
 |---|---|---|---|
@@ -90,22 +96,114 @@ Play Integrity in release builds, the debug provider in debug builds (`androidAp
 Production verifies tokens with the Admin SDK (a forged token is logged "AppCheck token was rejected"). The
 functions **emulator** skips verification (`skipTokenVerification`): it only tells missing from present.
 
-Rollout:
-1. Enable the **Firebase App Check API** and the **Play Integrity API** in Cloud project fetchit-437a0.
-2. Firebase console → App Check → Apps → `com.rimapps.fetchit` → **Play Integrity** → register the SHA-256 of the
-   key that signs the APK people install: the release keystore's, or with Play App Signing the "App signing key
-   certificate" from Play Console → Test and release → App integrity. (Debug builds don't use Play Integrity.)
-3. Same screen → ⋮ → **Manage debug tokens** → add the debug build's token:
+### Allow-list your debug build (to see `appCheck: "valid"` in the logs)
+1. Enable the **Firebase App Check API** in project fetchit-437a0:
+   https://console.cloud.google.com/apis/library/firebaseappcheck.googleapis.com?project=fetchit-437a0
+2. Install and open the **debug** build (`./gradlew :androidApp:installDebug`). It shares its application id with the
+   release build but not its signature, so uninstall the other one first (`adb uninstall com.rimapps.fetchit`).
+3. Read the debug token the SDK generated for this install (it's a secret: paste it, don't share it):
    ```bash
-   adb logcat -d | grep -A1 "App Check debug token"
+   adb logcat -d | grep DebugAppCheckProvider
    ```
-4. Check the logs show `appCheck: "valid"` (fetchItem's log line, `push token registered`) from both builds.
-5. Set `ENFORCE_APP_CHECK=true` in `functions/.env.fetchit-437a0` and `fb deploy --only functions --project fetchit-437a0`.
+   The line ends "…allow list in the Firebase Console for your project: <token>". A reinstall or "Clear data" makes a
+   new token, which has to be added again.
+4. Firebase console → **App Check** → **Apps** → `com.rimapps.fetchit` → ⋮ → **Manage debug tokens** → **Add debug
+   token**: name it (e.g. "Pixel_4 emulator") and paste the token. (If the app isn't listed as registered yet, register
+   it with Play Integrity first: step 1 of the rollout below.)
+5. Fetch something in the app, then check the verdict:
+   ```bash
+   fb functions:log --only fetchItem --project fetchit-437a0 | grep appCheck
+   ```
+   `"appCheck":"valid"` = token accepted; `"missing"` = no token (API off, token not allow-listed, or the 5-minute
+   back-off after a failure: force-stop and reopen the app).
 
-**Sideloaded APKs:** Play Integrity only vouches for apps Google Play recognises (installed from Play, or the
-package listed in Play Console with the Cloud project linked). A sideloaded release APK gets no token, so with
-enforcement on it can't call the backend. Judges installing an APK need either a Play (internal testing) install or
-`ENFORCE_APP_CHECK=false`.
+### Turning enforcement on later (after judging, or for a Play install)
+1. Enable the App Check API (above) and the **Play Integrity API**
+   (https://console.cloud.google.com/apis/library/playintegrity.googleapis.com?project=fetchit-437a0).
+2. App Check → Apps → `com.rimapps.fetchit` → **Play Integrity** → register the SHA-256 of the key that signs the APK
+   people install: the release keystore's (`F1:58:04:86:…:B7:A8`, see **Release signing**), or with Play App Signing
+   the "App signing key certificate" from Play Console → Test and release → App integrity.
+3. Allow-list debug tokens as above; check the logs show `appCheck: "valid"` from both builds.
+4. Set `ENFORCE_APP_CHECK=true` in `functions/.env.fetchit-437a0` and `fb deploy --only functions --project fetchit-437a0`.
+
+## Credit protection (rate limits + daily circuit breaker)
+
+`functions/src/limits.ts`; emulator test `npm run test:limits`.
+
+**Per-user rate limits** (fixed windows, UTC, counted in top-level `limits/{uid}`, which clients can't read):
+
+| Callable | Per hour | Per day |
+|---|---|---|
+| `fetchItem` (a "Which one?" pick is a second call) | 30 | 200 |
+| `findSimilar` | 30 | — |
+| `purchaseOffer` (counted before the idempotent replay check) | 20 | — |
+
+Over the limit → `resource-exhausted`, "Scout needs a quick nap, try again in a few minutes." (the user's dog name;
+"…a long nap, try again tomorrow." for the daily limit), logged as `rate limited`. The app shows the message as is.
+Limits are constants in `RATE_LIMITS`; change and redeploy. To unblock a user now: delete `limits/{uid}`.
+
+**Daily circuit breaker** (all users, UTC day, counted in `usage/{YYYY-MM-DD}`): every Gemini call, Claude call and
+Channel3 search / image search / similar (product detail is free and not counted). Caps are params in
+`functions/.env.fetchit-437a0`:
+
+| Param | Default | Over the cap |
+|---|---|---|
+| `DAILY_CAP_GEMINI` | 3000 | new photos refused ("long nap") |
+| `DAILY_CAP_CLAUDE` | 1500 | identify runs Gemini alone |
+| `DAILY_CAP_CHANNEL3` | 1000 | fetchItem and findSimilar refused |
+
+A lamp fetch is ~1–2 model calls + 2 Channel3 credits. The first trip per instance and day logs `circuit breaker
+tripped` (ERROR, with service/count/cap) and sets `usage/{day}.tripped.<service>`. Find it with
+`fb functions:log --project fetchit-437a0 | grep "circuit breaker"`, or a log-based alert on that text. Each instance
+re-reads the counts every 15 s, so a burst can overshoot a cap slightly. Raise a cap: edit the param, redeploy
+`fetchItem,findSimilar`. Purchases, approvals and watches don't use these APIs and keep working.
+
+### Spending limits on the keys themselves (do these too: the breaker only counts, the providers enforce)
+- **Gemini** (key from Google AI Studio, billed to its Google Cloud project):
+  - Hard cap: Cloud console → APIs & Services → **Generative Language API** → **Quotas & System Limits** → lower
+    "requests per day" (and per minute) for the models we use (`gemini-3.5-flash-lite`, `gemini-3.6-flash`). Requests
+    over a quota fail with 429, which identify already falls back from.
+  - Alerts: Cloud console → **Billing** → **Budgets & alerts** → budget on that project (e.g. $20/month, alerts at
+    50/90/100%). Budgets alert, they don't stop spending.
+  - AI Studio → **Usage & Billing** shows spend per project; if it offers a spend cap for the project, set it there too.
+- **Anthropic** (Claude Haiku key): Claude Console → **Settings → Limits** sets the organization's monthly spend
+  limit. Tighter: put the key in its own workspace (Settings → **Workspaces** → create "fetch-it" → create the key
+  there) and set that workspace's **spend limit** and rate limits. Over the limit the API returns errors and identify
+  falls back to Gemini.
+- **Channel3:** credits are prepaid in the Channel3 dashboard; the daily breaker above is the per-day guard.
+
+## Release signing
+
+- Keystore: `~/.fetchit/fetchit-release.jks` (outside the repo, mode 600), PKCS12, alias `fetchit`, RSA 4096,
+  valid until 2054. Created Oct 29 with a random password (same for store and key).
+- Certificate fingerprints (public, safe to share):
+  - SHA-256 `F1:58:04:86:32:86:B0:FA:F5:A6:C1:D5:3A:DE:CD:F3:28:3E:46:6E:27:43:62:E9:F5:85:EC:7C:8B:29:B7:A8`
+  - SHA-1 `1F:A9:74:6D:BE:84:E8:FD:73:9F:63:3F:7D:2D:D5:69:3E:15:24:CA`
+- Gradle reads it from `app/local.properties` (gitignored); without these entries release builds are unsigned:
+  ```properties
+  fetchit.release.storeFile=/Users/<you>/.fetchit/fetchit-release.jks
+  fetchit.release.storePassword=…
+  fetchit.release.keyAlias=fetchit
+  fetchit.release.keyPassword=…
+  ```
+- **Back it up now** (lose it and installed copies can't be updated with the same signature):
+  1. Password manager: a secure note "Fetch It release keystore" with the password (from `local.properties`) and the
+     `.jks` file attached.
+  2. A second, offline copy: e.g. an encrypted disk image or USB drive with the `.jks` + a text file with the password.
+  3. Never in the repo, Google Drive in plain form, chat, or email. Teammates who build releases get both through the
+     password manager.
+- Build, check the signature, install:
+  ```bash
+  cd app && ./gradlew :androidApp:assembleRelease
+  ```
+  ```bash
+  apksigner verify --print-certs app/androidApp/build/outputs/apk/release/androidApp-release.apk
+  ```
+  ```bash
+  adb uninstall com.rimapps.fetchit; adb install app/androidApp/build/outputs/apk/release/androidApp-release.apk
+  ```
+  (`apksigner` is in `~/Library/Android/sdk/build-tools/<version>/`.) The release APK talks to production. Debug and
+  release builds have the same application id and different signatures: uninstall one before installing the other.
 
 ## Scheduled functions and logs
 

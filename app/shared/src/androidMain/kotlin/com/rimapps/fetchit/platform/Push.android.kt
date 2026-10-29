@@ -123,7 +123,15 @@ actual fun rememberNotificationPermission(): () -> Unit {
  * can't attest (debug token not allow-listed, sideloaded build), the request goes without one and the backend
  * decides (ENFORCE_APP_CHECK).
  */
-actual suspend fun appCheckToken(): String? =
-    kotlinx.coroutines.withTimeoutOrNull(4_000) {
+/** After a failed token fetch (e.g. a sideloaded release build: no Play Integrity), skip App Check for a while. */
+private const val APP_CHECK_BACKOFF_MS = 5 * 60_000L
+@Volatile private var appCheckFailedAt = 0L
+
+actual suspend fun appCheckToken(): String? {
+    if (System.currentTimeMillis() - appCheckFailedAt < APP_CHECK_BACKOFF_MS) return null
+    val token = kotlinx.coroutines.withTimeoutOrNull(4_000) {
         runCatching { com.google.firebase.appcheck.FirebaseAppCheck.getInstance().getAppCheckToken(false).await().token }.getOrNull()
     }
+    if (token == null) appCheckFailedAt = System.currentTimeMillis()
+    return token
+}

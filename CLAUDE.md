@@ -125,6 +125,9 @@ uses it when no size is sent (`profileSize`: shoes → shoe size, US sizing only
 PayPal vault token lives in top-level **`vault/{uid}`**, which clients can't read (rules test covers it).
 Spend is stored as integer `totalCents` (float increments drift). The watches collection-group query needs
 the field override in `firestore.indexes.json`.
+Credit protection (`functions/src/limits.ts`), top-level so clients can't read them: **`limits/{uid}`** = per-action
+fixed windows `{hour, hourCount, day, dayCount}` (UTC); **`usage/{YYYY-MM-DD}`** = global calls to gemini / claude /
+channel3 (+ `tripped.<service>` timestamp when the daily cap was hit).
 
 **Simulated fulfilment** (`functions/src/fulfillment.ts`): after a successful capture, the completion transaction
 creates `users/{uid}/orders/{purchaseId}` (`simulated: true`, `retailerOrderId: DEMO-12345`, items, `totalCents`,
@@ -408,14 +411,16 @@ Bottom nav: Fetch · Activity · Rules + round "+" (upload).
       Punto Jacquard Rayas"). So also `looksNonEnglish(title)` (foreign letters like ø/ñ, or non-English shop words
       such as rayas/punto/med) → `languageFactor` 0.3 in the final score (findSimilar: sorted last). 1 unit test
       (35 total). Emulator vs prod: outfit → 5 English titles; abercrombie.com buy → live check "In stock" → declined.
-- [~] App Check (Oct 28): wired, **not enforced yet**. `enforceAppCheck: ENFORCE_APP_CHECK` on all 16 callables
+- [x] App Check (Oct 28): wired, **off through judging** (decided Oct 29: judges sideload the APK, which can't get
+      Play Integrity tokens; credits are protected by rate limits + circuit breaker instead). `enforceAppCheck: ENFORCE_APP_CHECK` on all 16 callables
       (param, false in .env.fetchit-437a0); app sends `X-Firebase-AppCheck` on callables + Firestore (debug provider in
       debug builds, Play Integrity in release, by source set); fetchItem / registerPushToken log `appCheck`.
       Verified: prod fetch from the debug build works and logs `appCheck: missing` (debug token not allow-listed, App
       Check API off); forged token sent to prod → "AppCheck token was rejected" (allowed only because not enforced);
       emulators with ENFORCE_APP_CHECK=true → no token = 401 (the emulator skips signature checks, so forged passes
-      there). Waiting on console registration (DEPLOY.md → App Check), then flip to true. Note: a sideloaded release
-      APK can't get Play Integrity tokens.
+      there). To see `VALID` verdicts from your own debug build, allow-list its debug token (DEPLOY.md → App Check).
+      The app skips App Check for 5 min after a failed token fetch, so a sideloaded release isn't slowed by the 4 s
+      timeout on every call.
 - [ ] PayPal webhooks
 - [x] App, Android (Oct 26, Pixel_4 emulator against production): onboarding → fetch → results → buy/approve → activity.
       Firebase over plain REST from shared Kotlin (`shared/.../data/Firebase.kt`): **anonymous** sign-in (provider enabled
@@ -474,3 +479,19 @@ Bottom nav: Fetch · Activity · Rules + round "+" (upload).
       cancel's activity entry now carries the purchaseId. Emulator vs prod: $22.90 polo auto-bought → cancelled
       within the 2-min window → order DEMO-98303 `cancelled`, PayPal refund `4M858077FS514363F` COMPLETED, spend back
       to $144.80, card "Cancelled. $22.90 refunded to your PayPal."; a shipped order shows no Cancel.
+- [x] Credit protection (Oct 29, deployed; DEPLOY.md → Credit protection). Per-user rate limits in `limits/{uid}`:
+      fetchItem 30/h + 200/day, findSimilar 30/h, purchaseOffer 20/h → `resource-exhausted` "<dog> needs a quick nap,
+      try again in a few minutes." (hour) / "…a long nap, try again tomorrow." (day); refused calls aren't counted;
+      fails open on Firestore errors. Global daily circuit breaker: `meter.record()` in lib/gemini, lib/claude,
+      lib/channel3 (search, image search, similar; detail is free) → `usage/{day}`; caps `DAILY_CAP_GEMINI` 3000,
+      `DAILY_CAP_CLAUDE` 1500, `DAILY_CAP_CHANNEL3` 1000 (params in .env.fetchit-437a0); instances re-read every 15 s.
+      Over cap → ERROR log `circuit breaker tripped` (once per instance/day); Gemini/Channel3 → fetches refused with
+      the long-nap message, Claude → identify runs on Gemini alone. `npm run test:limits` (emulators, 1 real fetch, 5 tests).
+      Spending caps on the keys themselves: DEPLOY.md (Cloud console API quotas for Gemini, Anthropic Console limits).
+- [x] Release signing (Oct 29): keystore `~/.fetchit/fetchit-release.jks` (outside the repo, alias `fetchit`, back it
+      up: DEPLOY.md → Release signing), read from `fetchit.release.*` in `app/local.properties` (gitignored); without
+      them the release build is unsigned. Signed release APK on Pixel_4 vs prod: fresh onboarding (PayPal link as
+      fetchBuyer, Home suggested, $200/$75 rules, sizes, Scout) → outfit photo → $32.90 zara.com polo NEEDS_APPROVAL
+      (first time at zara.com) → approved → PayPal `93P174878P978663V`, DEMO-38408 confirmed, arrives Sunday, spend
+      $32.90; limits/usage counted; App Check `MISSING` on every call (expected, not enforced). Fixed: the Fetched
+      screen showed the budget from before the purchase (now refreshes month-to-date on open).

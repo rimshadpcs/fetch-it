@@ -1,3 +1,4 @@
+import java.util.Properties
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -36,6 +37,18 @@ android {
         versionCode = 1
         versionName = "1.0"
     }
+    // Release signing from local.properties (gitignored); the keystore lives outside the repo (DEPLOY.md →
+    // Release signing). Without those entries, release builds come out unsigned.
+    val local = Properties().apply { rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use(::load) }
+    val releaseStore = local.getProperty("fetchit.release.storeFile")
+    signingConfigs {
+        if (releaseStore != null) create("release") {
+            storeFile = file(releaseStore)
+            storePassword = local.getProperty("fetchit.release.storePassword")
+            keyAlias = local.getProperty("fetchit.release.keyAlias")
+            keyPassword = local.getProperty("fetchit.release.keyPassword")
+        }
+    }
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -43,6 +56,7 @@ android {
     }
     buildTypes {
         release {
+            signingConfig = signingConfigs.findByName("release")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

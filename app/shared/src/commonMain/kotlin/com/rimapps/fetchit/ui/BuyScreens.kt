@@ -167,6 +167,8 @@ private fun RulesPassed(p: Purchase, modifier: Modifier = Modifier) {
 private fun Bought(app: AppState, p: Purchase) {
     var arrives by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(p.purchaseId) {
+        // This purchase is already in spend/{month} (reserved in the decision, kept on capture).
+        runCatching { app.monthToDate = app.api.monthToDate() }
         // The simulated order appears in the same transaction as the capture; retry briefly in case we're early.
         repeat(3) { if (arrives == null) { arrives = runCatching { app.api.promisedDelivery(p.purchaseId) }.getOrNull()?.let(::weekday); delay(800) } }
     }
