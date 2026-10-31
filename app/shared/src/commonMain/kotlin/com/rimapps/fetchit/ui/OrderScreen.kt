@@ -31,6 +31,7 @@ import com.rimapps.fetchit.AppState
 import com.rimapps.fetchit.Screen
 import com.rimapps.fetchit.data.Order
 import com.rimapps.fetchit.friendly
+import com.rimapps.fetchit.ui.motion.RunningDog
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -82,7 +83,7 @@ fun OrderScreen(app: AppState, screen: Screen.Order) {
             }
             Text("timeline", style = hand(22.sp, Ink.Muted))
             PaperNote(Modifier.fillMaxWidth(), tilt = 0f) {
-                if (timeline.isEmpty()) Text("Loading…", style = body(14.sp, color = Ink.Muted))
+                if (timeline.isEmpty()) RunningDog(60.dp)
                 timeline.forEach { e ->
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Box(Modifier.padding(top = 6.dp).size(8.dp).clip(CircleShape).background(if (e.status == "cancelled" || e.status == "refunded") Ink.Accent else Ink.Ink))

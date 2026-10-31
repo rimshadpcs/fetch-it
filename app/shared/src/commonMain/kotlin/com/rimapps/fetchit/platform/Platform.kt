@@ -53,3 +53,7 @@ object PushOpens {
 
 /** An App Check token for our backend (Play Integrity / debug provider on Android), or null if there isn't one. */
 expect suspend fun appCheckToken(): String?
+
+/** The system's "reduce motion" / "remove animations" accessibility setting. */
+@Composable
+expect fun systemReduceMotion(): Boolean

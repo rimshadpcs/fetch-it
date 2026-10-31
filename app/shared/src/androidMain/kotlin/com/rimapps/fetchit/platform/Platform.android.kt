@@ -119,3 +119,10 @@ actual fun rememberApprover(): Approver = remember {
         )
     }
 }
+
+/** Settings → Accessibility → Remove animations sets the animator scale to 0. */
+@Composable
+actual fun systemReduceMotion(): Boolean {
+    val context = LocalContext.current
+    return remember { android.provider.Settings.Global.getFloat(context.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f }
+}

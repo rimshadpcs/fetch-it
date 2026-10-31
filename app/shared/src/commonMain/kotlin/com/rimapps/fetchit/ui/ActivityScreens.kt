@@ -1,7 +1,9 @@
 package com.rimapps.fetchit.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -186,6 +188,7 @@ fun RulesScreen(app: AppState) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AccountScreen(app: AppState) {
     var confirmReset by remember { mutableStateOf(false) }
@@ -195,7 +198,7 @@ fun AccountScreen(app: AppState) {
             Text("You & ${app.dogName}", style = hand(30.sp))
         }
         Column(Modifier.padding(22.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-            Row(Modifier.clickable { app.go(Screen.Ready) }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Row(Modifier.combinedClickable(onLongClick = { app.go(Screen.MotionLab) }) { app.go(Screen.Ready) }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Mascot(80.dp)
                 Column {
                     Text(app.dogName, style = hand(30.sp))

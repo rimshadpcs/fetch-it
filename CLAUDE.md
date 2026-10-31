@@ -198,6 +198,20 @@ Bottom nav: Fetch · Activity · Rules + round "+" (upload).
 - Motion: cards rise in with stagger, doodles wobble, dog wags tail, approval sheet slides up,
   fingerprint button pulses, budget bars fill. Respect reduced-motion.
 
+### Motion kit (`shared/.../ui/motion/`, Compose only)
+Rules: one-shot animations ≤ ~600 ms (only Scout's idle loops run longer), nothing blocks taps beyond the Buy guard,
+`LocalReduceMotion` (system "Remove animations" / iOS Reduce Motion, provided in `App`) → every piece shows its end
+state at once (haptics still play). Hidden **Motion lab** (long-press the dog on Account) shows every piece with Replay.
+- `rememberProgress` (0→1 one-shot) · `rememberClock` (frame clock read in draw lambdas: loops redraw, no recomposition)
+- `PathDraw` + doodle paths (`wobblyLoop`, `doodleArrow`, `doodleCross`, `outlineBox`, `drawTruck`, `drawFingerprint`):
+  draws the first N% of the paths' length (PathMeasure segments), optional dashes
+- `HandwritingReveal` (left-to-right clip, ~40 ms/letter, ≤ 600 ms) · `Modifier.pinIn(index)` (drop, overshoot,
+  settle at a seeded tilt, 70 ms stagger) · `Stamp` (1.6→1 spring, then `ScreenShake` + haptic) · `CountUpMoney`
+- `Dog(size, DogMood)`: Idle, Wag, Sniffing, Excited, HeadShake, Sleeping (+ `bone`), `RunningDog`, `ScoutRunsIn`; all one
+  pose-based drawing of the design-canvas dog (`drawDog(DogPose)`), so every mood is recognisably Scout.
+- `Haptics`: stamp, undo, approve, block · `Modifier.sharedPhoto(key)`: shared element across screens
+  (`SharedTransitionLayout` around the screen `AnimatedContent`).
+
 ---
 
 ## Conventions

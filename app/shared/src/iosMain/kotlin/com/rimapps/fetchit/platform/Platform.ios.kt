@@ -43,3 +43,6 @@ actual fun rememberNotificationPermission(): () -> Unit = remember { {} }
 
 // TODO(iOS): App Attest / DeviceCheck provider via the Firebase iOS SDK.
 actual suspend fun appCheckToken(): String? = null
+
+@Composable
+actual fun systemReduceMotion(): Boolean = remember { platform.UIKit.UIAccessibilityIsReduceMotionEnabled() }

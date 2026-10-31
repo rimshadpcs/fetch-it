@@ -38,6 +38,8 @@ sealed interface Screen {
     data object Activity : Screen
     data object Rules : Screen
     data object Account : Screen
+    /** Hidden: long-press the dog on Account. Every motion piece on one page, for checking and recording. */
+    data object MotionLab : Screen
 
     // Fetch flow
     data object WhichOne : Screen

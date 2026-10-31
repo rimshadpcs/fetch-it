@@ -1,0 +1,109 @@
+package com.rimapps.fetchit.ui.motion
+
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.keyframes
+import androidx.compose.animation.core.tween
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.withFrameMillis
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
+
+// The scrapbook motion kit. Rules: one-shot animations stay under ~600 ms (only Scout's idle loops run longer),
+// nothing here blocks input, and with reduce motion on everything shows its end state at once.
+
+/** True when the system asks for reduced motion; provided once at the app root. */
+val LocalReduceMotion = staticCompositionLocalOf { false }
+
+/** 0 → 1 over [durationMs] after [delayMs], restarted when [key] changes. Already 1 with reduce motion. */
+@Composable
+fun rememberProgress(key: Any? = Unit, durationMs: Int = 450, delayMs: Int = 0, easing: Easing = FastOutSlowInEasing): State<Float> {
+    val reduce = LocalReduceMotion.current
+    val a = remember(key) { Animatable(if (reduce) 1f else 0f) }
+    LaunchedEffect(key, reduce) {
+        if (reduce) { a.snapTo(1f); return@LaunchedEffect }
+        if (delayMs > 0) delay(delayMs.toLong())
+        a.animateTo(1f, tween(durationMs, easing = easing))
+    }
+    return a.asState()
+}
+
+/**
+ * Milliseconds since this composable appeared, ticking every frame (0 forever with reduce motion). Read it in a
+ * draw lambda so loops redraw without recomposing.
+ */
+@Composable
+fun rememberClock(running: Boolean = true): State<Long> {
+    val reduce = LocalReduceMotion.current
+    val t = remember { mutableLongStateOf(0L) }
+    LaunchedEffect(running, reduce) {
+        if (!running || reduce) return@LaunchedEffect
+        val start = withFrameMillis { it } - t.longValue
+        while (true) withFrameMillis { t.longValue = it - start }
+    }
+    return t
+}
+
+/** A short horizontal shake of the whole screen (a stamp landing). */
+class ScreenShake {
+    internal val x = Animatable(0f)
+    suspend fun shake() {
+        x.snapTo(0f)
+        x.animateTo(0f, keyframes { durationMillis = 300; 7f at 40; -6f at 100; 4f at 160; -2f at 220 })
+    }
+}
+
+val LocalScreenShake = staticCompositionLocalOf { ScreenShake() }
+
+/** Applied once at the root, around every screen. */
+fun Modifier.shakeable(shake: ScreenShake): Modifier = graphicsLayer { translationX = shake.x.value * 1.dp.toPx() }
+
+/** The four moments that buzz. */
+class Haptics(private val h: HapticFeedback) {
+    fun stamp() = h.performHapticFeedback(HapticFeedbackType.LongPress)
+    fun undo() = h.performHapticFeedback(HapticFeedbackType.ToggleOff)
+    fun approve() = h.performHapticFeedback(HapticFeedbackType.Confirm)
+    fun block() = h.performHapticFeedback(HapticFeedbackType.Reject)
+}
+
+@Composable
+fun rememberHaptics(): Haptics {
+    val h = LocalHapticFeedback.current
+    return remember(h) { Haptics(h) }
+}
+
+// ---- Shared elements between screens (the user's photo: Fetch → Which one? → Results header) ----
+
+@OptIn(ExperimentalSharedTransitionApi::class)
+val LocalSharedScope = compositionLocalOf<SharedTransitionScope?> { null }
+val LocalScreenScope = compositionLocalOf<AnimatedVisibilityScope?> { null }
+
+/** Marks this as the same element as every other `sharedPhoto(key)` on the next / previous screen. */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+fun Modifier.sharedPhoto(key: Any): Modifier {
+    val shared = LocalSharedScope.current ?: return this
+    val screen = LocalScreenScope.current ?: return this
+    if (LocalReduceMotion.current) return this
+    return with(shared) {
+        this@sharedPhoto.sharedElement(
+            rememberSharedContentState(key), screen,
+            boundsTransform = { _, _ -> tween(420, easing = FastOutSlowInEasing) },
+        )
+    }
+}

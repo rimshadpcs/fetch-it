@@ -22,7 +22,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -58,6 +57,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.rimapps.fetchit.ui.motion.RunningDog
 import kotlinx.coroutines.delay
 import com.rimapps.fetchit.AppState
 import com.rimapps.fetchit.Screen
@@ -191,7 +191,6 @@ private fun SniffingView(app: AppState, modifier: Modifier) {
                         .background(Ink.White).padding(horizontal = 14.dp, vertical = 9.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    CircularProgressIndicator(Modifier.size(14.dp), color = Ink.Ink, strokeWidth = 2.dp)
                     Text(if (s.identified.isEmpty()) "Sniffing around…" else "Checking stores…", style = body(13.sp, FontWeight.SemiBold))
                 }
             }
@@ -205,7 +204,7 @@ private fun SniffingView(app: AppState, modifier: Modifier) {
                 }
             }
         }
-        Gap(10.dp)
+        if (s.loading) RunningDog(90.dp, Modifier.align(Alignment.CenterHorizontally)) else Gap(10.dp)
         if (s.error != null) {
             ErrorNote(s.error)
             PillButton("Try another photo", onClick = { app.session = null })
@@ -248,7 +247,7 @@ fun WhichOneScreen(app: AppState) {
                 }
             }
             if (s.loading) Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(Modifier.size(16.dp), color = Ink.Ink, strokeWidth = 2.dp)
+                RunningDog(48.dp)
                 Text("Checking stores…", style = body(14.sp, FontWeight.SemiBold))
             }
             ErrorNote(s.error)
