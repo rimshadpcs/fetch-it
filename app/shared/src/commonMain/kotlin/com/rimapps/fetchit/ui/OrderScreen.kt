@@ -1,5 +1,6 @@
 package com.rimapps.fetchit.ui
 
+import com.rimapps.fetchit.ui.components.PillButton
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box

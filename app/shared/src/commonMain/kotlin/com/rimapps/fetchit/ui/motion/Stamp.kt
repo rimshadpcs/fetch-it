@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rimapps.fetchit.ui.Ink
@@ -28,7 +29,7 @@ import kotlinx.coroutines.launch
  * lands. With reduce motion it's simply there (the haptic still plays).
  */
 @Composable
-fun Stamp(text: String, modifier: Modifier = Modifier, color: Color = Ink.Accent, rotation: Float = -10f, delayMs: Int = 0, haptic: Boolean = true) {
+fun Stamp(text: String, modifier: Modifier = Modifier, color: Color = Ink.Accent, rotation: Float = -10f, delayMs: Int = 0, haptic: Boolean = true, fontSize: TextUnit = 26.sp) {
     val reduce = LocalReduceMotion.current
     val shake = LocalScreenShake.current
     val haptics = rememberHaptics()
@@ -49,6 +50,6 @@ fun Stamp(text: String, modifier: Modifier = Modifier, color: Color = Ink.Accent
             .border(3.dp, color, RoundedCornerShape(6.dp)).padding(3.dp)
             .border(1.2.dp, color, RoundedCornerShape(4.dp)).padding(horizontal = 12.dp, vertical = 2.dp),
     ) {
-        Text(text, style = body(26.sp, FontWeight.Bold, color).copy(letterSpacing = 3.sp))
+        Text(text, style = body(fontSize, FontWeight.Bold, color).copy(letterSpacing = fontSize * 0.11f))
     }
 }

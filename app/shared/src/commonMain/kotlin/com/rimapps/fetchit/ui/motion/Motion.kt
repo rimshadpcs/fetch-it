@@ -30,13 +30,15 @@ import kotlinx.coroutines.delay
 /** True when the system asks for reduced motion; provided once at the app root. */
 val LocalReduceMotion = staticCompositionLocalOf { false }
 
-/** 0 → 1 over [durationMs] after [delayMs], restarted when [key] changes. Already 1 with reduce motion. */
+/** 0 → 1 over [durationMs] after [delayMs], restarted when [key] changes. Already 1 with reduce motion (unless [fadeOnly]). */
 @Composable
-fun rememberProgress(key: Any? = Unit, durationMs: Int = 450, delayMs: Int = 0, easing: Easing = FastOutSlowInEasing): State<Float> {
+fun rememberProgress(key: Any? = Unit, durationMs: Int = 450, delayMs: Int = 0, easing: Easing = FastOutSlowInEasing, fadeOnly: Boolean = false): State<Float> {
     val reduce = LocalReduceMotion.current
-    val a = remember(key) { Animatable(if (reduce) 1f else 0f) }
+    // fadeOnly: the caller turns this into a plain fade under reduce motion, so keep animating (it's not motion).
+    val snap = reduce && !fadeOnly
+    val a = remember(key) { Animatable(if (snap) 1f else 0f) }
     LaunchedEffect(key, reduce) {
-        if (reduce) { a.snapTo(1f); return@LaunchedEffect }
+        if (snap) { a.snapTo(1f); return@LaunchedEffect }
         if (delayMs > 0) delay(delayMs.toLong())
         a.animateTo(1f, tween(durationMs, easing = easing))
     }
@@ -73,13 +75,23 @@ val LocalScreenShake = staticCompositionLocalOf { ScreenShake() }
 /** Applied once at the root, around every screen. */
 fun Modifier.shakeable(shake: ScreenShake): Modifier = graphicsLayer { translationX = shake.x.value * 1.dp.toPx() }
 
-/** The four moments that buzz. */
+/** Every buzz in the app, by meaning. */
 class Haptics(private val h: HapticFeedback) {
     fun stamp() = h.performHapticFeedback(HapticFeedbackType.LongPress)
     fun undo() = h.performHapticFeedback(HapticFeedbackType.ToggleOff)
     fun approve() = h.performHapticFeedback(HapticFeedbackType.Confirm)
     fun block() = h.performHapticFeedback(HapticFeedbackType.Reject)
+    /** Light tap: black pill pressed. */
+    fun tap() = h.performHapticFeedback(HapticFeedbackType.VirtualKey)
+    /** Segmented control / size picked. */
+    fun tick() = h.performHapticFeedback(HapticFeedbackType.SegmentTick)
+    /** A primary action finished (check drawn). */
+    fun success() = h.performHapticFeedback(HapticFeedbackType.Confirm)
+    fun toggle(on: Boolean) = h.performHapticFeedback(if (on) HapticFeedbackType.ToggleOn else HapticFeedbackType.ToggleOff)
 }
+
+/** Spring used by every press / select / slide: dampingRatio 0.6–0.7 per the motion rules. */
+fun <T> uiSpring(stiffness: Float = 600f, damping: Float = 0.65f) = androidx.compose.animation.core.spring<T>(dampingRatio = damping, stiffness = stiffness)
 
 @Composable
 fun rememberHaptics(): Haptics {

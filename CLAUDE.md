@@ -209,8 +209,28 @@ state at once (haptics still play). Hidden **Motion lab** (long-press the dog on
   settle at a seeded tilt, 70 ms stagger) · `Stamp` (1.6→1 spring, then `ScreenShake` + haptic) · `CountUpMoney`
 - `Dog(size, DogMood)`: Idle, Wag, Sniffing, Excited, HeadShake, Sleeping (+ `bone`), `RunningDog`, `ScoutRunsIn`; all one
   pose-based drawing of the design-canvas dog (`drawDog(DogPose)`), so every mood is recognisably Scout.
-- `Haptics`: stamp, undo, approve, block · `Modifier.sharedPhoto(key)`: shared element across screens
-  (`SharedTransitionLayout` around the screen `AnimatedContent`).
+- `Haptics`: stamp, undo, approve, block, tap, tick, success, toggle · `Modifier.sharedPhoto(key)`: shared element across
+  screens (`SharedTransitionLayout` around the screen `AnimatedContent`).
+- Entrances (`Entrance.kt`): `riseIn`, `popIn`, `noteSlideIn`, `wiggleAfterIdle`, `Tape`, `pageTurn`. `uiSpring()` =
+  dampingRatio 0.65 (rules: taps 80–150 ms, transitions 250–400 ms, celebrations ≤ 600 ms, springs 0.6–0.7).
+  Under reduce motion entrances and screen switches become plain fades (`rememberProgress(fadeOnly = true)`).
+
+### Components (`shared/.../ui/components/`)
+- `Modifier.pressScale(source, Press.PILL 0.96 | GRAY 0.95 | ROUND 0.90, tilt)`: 80 ms sink, spring back with
+  overshoot; round buttons also turn ±6° once (`Modifier.roundButton`, `Modifier.grayPress`). Visual only, never
+  delays a click. Buy keeps its own armed gesture and feeds presses into the same effect.
+- `PillButton(…, loading, done)`: shadow tightens on press + light haptic; loading = dashed spinner; done = pen ✓ in
+  300 ms + success haptic, caller moves on ~350 ms later (`DONE_PAUSE_MS`); disabled→enabled fades 0.4→1 with an
+  arming bounce.
+- `Segmented` (sliding white pill, color crossfade, tick haptic) · `Chip(check = true)` for multi-select (pop 1.08→1 +
+  drawn ✓; deselect shrinks and fades) · `Toggle`/`PawSwitch` (spring knob, track fill, paw print for 600 ms on "on") ·
+  `SizePicker` (pen circle around the pick; `flipKey` flips the labels US→UK→EU) · `AmountField` (typed whole dollars,
+  CountUp on change, underline black while focused, warning slides down with a pulsing red dot).
+- Onboarding: steps turn like pages (slide + 3° swing, progress segment fills), Welcome polaroids drop and get taped,
+  headline writes on word by word; Link PayPal ticks draw one by one, "LINKED ✓" stamps in and Scout hops on return;
+  the address note slides in and a pin drops on confirm; rules chips pop in, the per-item bar fills; size rows rise,
+  Skip wiggles after 5 s idle; Scout pops in, tilts his head while you type his name, runs off on Start fetching, and
+  the camera screen slides up.
 
 ---
 

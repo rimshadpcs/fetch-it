@@ -1,6 +1,12 @@
 package com.rimapps.fetchit
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterExitState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import com.rimapps.fetchit.ui.motion.pageTurn
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
@@ -71,9 +77,13 @@ fun App(register: ((() -> Boolean) -> Unit)? = null) {
         CompositionLocalProvider(LocalReduceMotion provides reduceMotion, LocalScreenShake provides shake) {
             SharedTransitionLayout(Modifier.fillMaxSize().shakeable(shake)) {
                 CompositionLocalProvider(LocalSharedScope provides this) {
-                    AnimatedContent(app.screen, transitionSpec = { screenTransition(initialState, targetState) }, label = "screen") { screen ->
+                    AnimatedContent(app.screen, transitionSpec = { screenTransition(initialState, targetState, reduceMotion) }, label = "screen") { screen ->
                         CompositionLocalProvider(LocalScreenScope provides this) {
-                            Box(Modifier.fillMaxSize()) {
+                            // Onboarding steps turn like pages: a slight swing around the bottom edge as they slide.
+                            val turn = if (screen in ONBOARDING && !reduceMotion) transition.animateFloat({ tween(350) }, label = "turn") {
+                                when (it) { EnterExitState.PreEnter -> 0f; EnterExitState.Visible -> 1f; EnterExitState.PostExit -> 2f }
+                            }.value else 1f
+                            Box(Modifier.fillMaxSize().then(if (turn != 1f) Modifier.pageTurn(turn) else Modifier)) {
                                 when (screen) {
                                     Screen.Welcome -> WelcomeScreen(app)
                                     Screen.LinkPayPal -> LinkPayPalScreen(app)
@@ -103,9 +113,25 @@ fun App(register: ((() -> Boolean) -> Unit)? = null) {
     }
 }
 
-/** The photo flows from Fetch into Which one? / Results as a shared element: those switches cross-fade slower so it can travel. */
-private fun screenTransition(from: Screen, to: Screen): ContentTransform {
+private val ONBOARDING = listOf<Screen>(Screen.Welcome, Screen.LinkPayPal, Screen.OnbRules, Screen.OnbSizes, Screen.Ready)
+
+/**
+ * Onboarding steps slide like turning pages (back = the other way); "Start fetching" slides the camera screen up;
+ * the photo flows from Fetch into Which one? / Results as a shared element, so those cross-fade slower so it can
+ * travel. Everything else is a quick cross-fade. With reduce motion everything is a cross-fade.
+ */
+private fun screenTransition(from: Screen, to: Screen, reduce: Boolean): ContentTransform {
     val photoFlow = setOf<Screen>(Screen.Fetch, Screen.WhichOne, Screen.Results)
-    return if (from in photoFlow && to in photoFlow && from != to) fadeIn(tween(420)) togetherWith fadeOut(tween(420))
-    else fadeIn(tween(180)) togetherWith fadeOut(tween(120))
+    return when {
+        reduce -> fadeIn(tween(200)) togetherWith fadeOut(tween(150))
+        from in ONBOARDING && to in ONBOARDING -> {
+            val dir = if (ONBOARDING.indexOf(to) > ONBOARDING.indexOf(from)) 1 else -1
+            (slideInHorizontally(tween(350)) { it * dir } + fadeIn(tween(250))) togetherWith
+                (slideOutHorizontally(tween(350)) { -it * dir / 3 } + fadeOut(tween(250)))
+        }
+        from == Screen.Ready && to == Screen.Fetch ->
+            (slideInVertically(tween(380)) { it } + fadeIn(tween(200))) togetherWith fadeOut(tween(250))
+        from in photoFlow && to in photoFlow && from != to -> fadeIn(tween(420)) togetherWith fadeOut(tween(420))
+        else -> fadeIn(tween(180)) togetherWith fadeOut(tween(120))
+    }
 }

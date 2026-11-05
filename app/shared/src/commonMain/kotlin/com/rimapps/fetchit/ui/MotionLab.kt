@@ -1,5 +1,6 @@
 package com.rimapps.fetchit.ui
 
+import com.rimapps.fetchit.ui.components.Chip
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,6 +31,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rimapps.fetchit.AppState
+import androidx.compose.runtime.mutableStateOf
+import com.rimapps.fetchit.ui.components.AmountField
+import com.rimapps.fetchit.ui.components.PillButton
+import com.rimapps.fetchit.ui.components.Segmented
+import com.rimapps.fetchit.ui.components.SizePicker
+import com.rimapps.fetchit.ui.components.Toggle
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import com.rimapps.fetchit.ui.motion.CountUpMoney
 import com.rimapps.fetchit.ui.motion.Dog
 import com.rimapps.fetchit.ui.motion.DogMood
@@ -106,6 +115,39 @@ fun MotionLabScreen(app: AppState) {
                     Stamp("FETCHED", delayMs = 200)
                     Stamp("OK'D", color = Ink.Ink, rotation = 8f, delayMs = 900, haptic = false)
                 }
+
+                Label("Buttons: press, loading, done, arming")
+                var stage by remember { mutableIntStateOf(0) }
+                val scope = androidx.compose.runtime.rememberCoroutineScope()
+                PillButton(if (stage == 3) "Armed again" else "Save", loading = stage == 1, done = stage == 2, enabled = stage != 4, onClick = {
+                    scope.launch { stage = 1; delay(1200); stage = 2; delay(700); stage = 4; delay(900); stage = 3 }
+                })
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    PillButton("Gray pill", dark = false, height = 50.dp, modifier = Modifier.width(150.dp), onClick = {})
+                    BackButton({})
+                }
+
+                Label("Selections")
+                var seg by remember { mutableStateOf("Best") }
+                Segmented(listOf("Best", "Cheapest", "Nearest"), seg, { it }, { seg = it })
+                var picked by remember { mutableStateOf(setOf("Home")) }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("Home", "Clothing", "Shoes", "Books").forEach { c ->
+                        Chip(c, c in picked, check = true, onClick = { picked = if (c in picked) picked - c else picked + c })
+                    }
+                }
+                var on by remember { mutableStateOf(false) }
+                Toggle("Ask before a new store", on) { on = it }
+                var scale by remember { mutableStateOf("US") }
+                var shoe by remember { mutableStateOf<String?>("US 9") }
+                Segmented(listOf("US", "UK", "EU"), scale, { it }, { scale = it }, Modifier.width(180.dp))
+                val shoes = when (scale) { "UK" -> (5..11).map { "UK $it" }; "EU" -> (39..45).map { "EU $it" }; else -> (6..12).map { "US $it" } }
+                SizePicker(shoes, shoe, { shoe = it }, display = { it.substringAfter(' ') }, flipKey = scale)
+                var budget by remember { mutableStateOf(200.0) }
+                var limit by remember { mutableStateOf(75.0) }
+                AmountField(budget, { budget = it }, " a month")
+                AmountField(limit, { limit = it }, " per item", warning = if (limit > budget) "That's more than your monthly budget" else null)
+                Segmented(listOf(25.0, 75.0, 300.0), limit, { money(it) }, { limit = it })
 
                 Label("CountUp")
                 CountUpMoney(167.10, body(34.sp, FontWeight.Medium))

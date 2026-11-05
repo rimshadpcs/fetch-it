@@ -1,5 +1,6 @@
 package com.rimapps.fetchit.ui
 
+import com.rimapps.fetchit.ui.components.PillButton
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable

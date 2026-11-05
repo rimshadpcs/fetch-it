@@ -25,14 +25,14 @@ fun pinTilt(seed: Int, max: Float = 1.8f): Float {
 @Composable
 fun Modifier.pinIn(index: Int, tilt: Float = pinTilt(index)): Modifier {
     val reduce = LocalReduceMotion.current
-    val a = remember { Animatable(if (reduce) 1f else 0f) }
+    val a = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
-        if (reduce) return@LaunchedEffect
         delay(70L * index.coerceAtMost(6))
-        a.animateTo(1f, spring(dampingRatio = 0.5f, stiffness = 520f))
+        a.animateTo(1f, if (reduce) androidx.compose.animation.core.tween(200) else spring(dampingRatio = 0.5f, stiffness = 520f))
     }
     return graphicsLayer {
         val v = a.value
+        if (reduce) { alpha = v; rotationZ = tilt; return@graphicsLayer }
         alpha = (v * 4f).coerceIn(0f, 1f)
         translationY = (1f - v) * -34.dp.toPx()
         val s = 1f + (1f - v) * 0.07f

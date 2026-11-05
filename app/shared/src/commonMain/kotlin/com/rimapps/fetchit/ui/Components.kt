@@ -44,6 +44,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.rimapps.fetchit.ui.components.roundButton
+import com.rimapps.fetchit.ui.motion.rememberProgress
 
 /** Dotted paper background (radial dots every 18 dp). */
 fun Modifier.dotted(): Modifier = this.background(Ink.Background).drawBehind {
@@ -56,61 +58,6 @@ fun Modifier.dotted(): Modifier = this.background(Ink.Background).drawBehind {
             x += step
         }
         y += step
-    }
-}
-
-/** Black pill, 58 dp. */
-@Composable
-fun PillButton(
-    text: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-    loading: Boolean = false,
-    dark: Boolean = true,
-    height: Dp = 58.dp,
-    leading: (@Composable () -> Unit)? = null,
-) {
-    val bg = if (dark) Ink.Ink else Ink.Pill
-    val fg = if (dark) Ink.White else Ink.Muted
-    Row(
-        modifier.fillMaxWidth().height(height).clip(RoundedCornerShape(999.dp)).background(bg)
-            .alpha(if (enabled) 1f else 0.45f)
-            .clickable(enabled = enabled && !loading, role = Role.Button, onClick = onClick),
-        horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (loading) CircularProgressIndicator(Modifier.size(22.dp), color = fg, strokeWidth = 2.5.dp)
-        else {
-            leading?.invoke()
-            Text(text, style = body(if (dark) 17.sp else 16.sp, if (dark) FontWeight.SemiBold else FontWeight.Medium, fg))
-        }
-    }
-}
-
-/** Gray pill chip; black when selected. */
-@Composable
-fun Chip(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Box(
-        modifier.height(40.dp).clip(RoundedCornerShape(999.dp)).background(if (selected) Ink.Ink else Ink.Pill)
-            .clickable(role = Role.Checkbox, onClick = onClick).padding(horizontal = 16.dp),
-        contentAlignment = Alignment.Center,
-    ) { Text(text, style = body(14.sp, FontWeight.SemiBold, if (selected) Ink.White else Ink.NavGrey)) }
-}
-
-/** Segmented control: gray track, white selected segment. */
-@Composable
-fun <T> Segmented(options: List<T>, selected: T, label: (T) -> String, onSelect: (T) -> Unit, modifier: Modifier = Modifier) {
-    Row(modifier.clip(RoundedCornerShape(999.dp)).background(Ink.Pill).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        options.forEach { o ->
-            val on = o == selected
-            Box(
-                Modifier.weight(1f).height(40.dp).then(if (on) Modifier.shadow(2.dp, RoundedCornerShape(999.dp)) else Modifier)
-                    .clip(RoundedCornerShape(999.dp)).background(if (on) Ink.White else Color.Transparent)
-                    .clickable(role = Role.Tab) { onSelect(o) },
-                contentAlignment = Alignment.Center,
-            ) { Text(label(o), style = body(15.sp, if (on) FontWeight.SemiBold else FontWeight.Medium, if (on) Ink.Ink else Ink.NavGrey)) }
-        }
     }
 }
 
@@ -148,7 +95,7 @@ fun ProductImage(url: String?, modifier: Modifier = Modifier) {
 @Composable
 fun BackButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
     Box(
-        modifier.size(44.dp).clip(CircleShape).background(Ink.Pill).clickable(role = Role.Button, onClick = onClick),
+        modifier.size(44.dp).roundButton(onClick).background(Ink.Pill),
         contentAlignment = Alignment.Center,
     ) {
         Canvas(Modifier.size(16.dp)) {
@@ -171,8 +118,13 @@ fun StepHeader(step: Int, total: Int = 4, onBack: (() -> Unit)?) {
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            // The segment for this step fills as the page turns in; earlier ones are already full.
+            val fill = rememberProgress(step, 380, 150)
             repeat(total) { i ->
-                Box(Modifier.weight(1f).height(4.dp).clip(RoundedCornerShape(2.dp)).background(if (i < step) Ink.Ink else Ink.TrackOff))
+                Box(Modifier.weight(1f).height(4.dp).clip(RoundedCornerShape(2.dp)).background(Ink.TrackOff)) {
+                    val f = when { i < step - 1 -> 1f; i == step - 1 -> fill.value; else -> 0f }
+                    Box(Modifier.fillMaxWidth(f).height(4.dp).background(Ink.Ink))
+                }
             }
         }
     }
@@ -182,7 +134,7 @@ fun StepHeader(step: Int, total: Int = 4, onBack: (() -> Unit)?) {
 @Composable
 fun BudgetBar(fraction: Float, modifier: Modifier = Modifier, color: Color = Ink.Ink) {
     val anim = remember { Animatable(0f) }
-    LaunchedEffect(fraction) { anim.animateTo(fraction.coerceIn(0f, 1f), tween(900)) }
+    LaunchedEffect(fraction) { anim.animateTo(fraction.coerceIn(0f, 1f), tween(500)) }
     Box(modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)).background(Ink.TrackOff)) {
         Box(Modifier.fillMaxWidth(anim.value).height(6.dp).clip(RoundedCornerShape(3.dp)).background(color))
     }

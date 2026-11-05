@@ -1,10 +1,12 @@
 package com.rimapps.fetchit.ui
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -21,8 +23,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -34,26 +34,50 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rimapps.fetchit.AppState
 import com.rimapps.fetchit.Screen
-import com.rimapps.fetchit.Sizes
 import com.rimapps.fetchit.data.HouseRules
 import com.rimapps.fetchit.data.Place
 import com.rimapps.fetchit.data.ShopCategory
 import com.rimapps.fetchit.friendly
 import com.rimapps.fetchit.platform.DeepLinks
 import com.rimapps.fetchit.platform.openBrowser
+import com.rimapps.fetchit.ui.components.AmountField
+import com.rimapps.fetchit.ui.components.CheckMark
+import com.rimapps.fetchit.ui.components.Chip
+import com.rimapps.fetchit.ui.components.PillButton
+import com.rimapps.fetchit.ui.components.Segmented
+import com.rimapps.fetchit.ui.components.SizePicker
+import com.rimapps.fetchit.ui.components.Toggle
+import com.rimapps.fetchit.ui.motion.Dog
+import com.rimapps.fetchit.ui.motion.DogMood
+import com.rimapps.fetchit.ui.motion.LocalReduceMotion
+import com.rimapps.fetchit.ui.motion.PathDraw
+import com.rimapps.fetchit.ui.motion.RunningDog
+import com.rimapps.fetchit.ui.motion.Stamp
+import com.rimapps.fetchit.ui.motion.Tape
+import com.rimapps.fetchit.ui.motion.noteSlideIn
+import com.rimapps.fetchit.ui.motion.pinIn
+import com.rimapps.fetchit.ui.motion.popIn
+import com.rimapps.fetchit.ui.motion.rememberProgress
+import com.rimapps.fetchit.ui.motion.riseIn
+import com.rimapps.fetchit.ui.motion.uiSpring
+import com.rimapps.fetchit.ui.motion.wiggleAfterIdle
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+/** After a primary action's ✓ has drawn, move on. */
+private const val DONE_PAUSE_MS = 350L
+
+/** Welcome: polaroids drop in and get taped down, the headline writes on word by word, Scout wags, the button rises. */
 @Composable
 fun WelcomeScreen(app: AppState) {
     val scope = rememberCoroutineScope()
@@ -62,26 +86,26 @@ fun WelcomeScreen(app: AppState) {
     Column(Modifier.fillMaxSize().dotted().padding(bottom = 34.dp)) {
         Text("Fetch It", style = body(22.sp, color = Ink.LightGrey), modifier = Modifier.align(Alignment.End).padding(top = 58.dp, end = 26.dp))
         Box(Modifier.fillMaxWidth().height(340.dp)) {
-            Polaroid(null, "mushroom lamp", Modifier.width(190.dp).offset(36.dp, 30.dp), tilt = -6f, imageHeight = 150.dp)
-            Polaroid(null, "tan sneakers", Modifier.width(170.dp).align(Alignment.TopEnd).offset((-30).dp, 120.dp), tilt = 5f, imageHeight = 130.dp)
-            Mascot(110.dp, Modifier.align(Alignment.BottomStart).offset(26.dp, 10.dp))
+            Box(Modifier.offset(36.dp, 30.dp).pinIn(0, tilt = 0f)) {
+                Polaroid(null, "mushroom lamp", Modifier.width(190.dp), tilt = -6f, imageHeight = 150.dp)
+                Tape(Modifier.align(Alignment.TopCenter).offset(y = (-6).dp), rotation = -10f, delayMs = 380)
+            }
+            Box(Modifier.align(Alignment.TopEnd).offset((-30).dp, 120.dp).pinIn(2, tilt = 0f)) {
+                Polaroid(null, "tan sneakers", Modifier.width(170.dp), tilt = 5f, imageHeight = 130.dp)
+                Tape(Modifier.align(Alignment.TopCenter).offset(y = (-4).dp), rotation = 8f, delayMs = 520)
+            }
+            Mascot(110.dp, Modifier.align(Alignment.BottomStart).offset(26.dp, 10.dp).riseIn(250))
         }
-        Text(
-            buildAnnotatedString {
-                append("You spot it.\nWe ")
-                withStyle(SpanStyle(fontFamily = Fonts.serif, fontStyle = FontStyle.Italic, fontWeight = FontWeight.Normal, fontSize = 52.sp)) { append("fetch") }
-                append(" it.")
-            },
-            style = body(46.sp, FontWeight.Medium).copy(lineHeight = 48.sp, letterSpacing = (-1.6).sp),
-            modifier = Modifier.padding(horizontal = 26.dp, vertical = 8.dp),
-        )
+        val big = body(46.sp, FontWeight.Medium).copy(letterSpacing = (-1.6).sp)
+        val accent = big.copy(fontFamily = Fonts.serif, fontStyle = FontStyle.Italic, fontWeight = FontWeight.Normal, fontSize = 52.sp)
+        WordByWord(listOf(listOf("You" to big, "spot" to big, "it." to big), listOf("We" to big, "fetch" to accent, "it." to big)), startMs = 350, modifier = Modifier.padding(horizontal = 26.dp, vertical = 8.dp))
         Text(
             "Snap it, and your agent finds it, checks your rules, and pays with PayPal.",
-            style = body(16.sp, color = Ink.NavGrey), modifier = Modifier.padding(horizontal = 26.dp),
+            style = body(16.sp, color = Ink.NavGrey), modifier = Modifier.padding(horizontal = 26.dp).riseIn(900),
         )
         Spacer()
         ErrorNote(error, Modifier.padding(horizontal = 26.dp, vertical = 8.dp))
-        PillButton("Let's fetch", loading = busy, modifier = Modifier.padding(horizontal = 20.dp), onClick = {
+        PillButton("Let's fetch", loading = busy, modifier = Modifier.padding(horizontal = 20.dp).riseIn(1000, distance = 40.dp), onClick = {
             busy = true; error = null
             scope.launch {
                 runCatching { app.ensureSignedIn() }
@@ -90,6 +114,22 @@ fun WelcomeScreen(app: AppState) {
                 busy = false
             }
         })
+    }
+}
+
+/** Lines of words that write on one after another (90 ms apart), aligned on their baselines. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun WordByWord(lines: List<List<Pair<String, TextStyle>>>, startMs: Int, modifier: Modifier = Modifier) {
+    var i = 0
+    Column(modifier) {
+        lines.forEach { words ->
+            Row(horizontalArrangement = Arrangement.spacedBy(11.dp)) {
+                words.forEach { (w, style) ->
+                    Text(w, style = style.copy(lineHeight = 48.sp), modifier = Modifier.alignByBaseline().riseIn(startMs + 90 * i++, distance = 10.dp, durationMs = 260))
+                }
+            }
+        }
     }
 }
 
@@ -104,13 +144,26 @@ fun LinkPayPalScreen(app: AppState) {
     var linked by remember { mutableStateOf(app.user.paypalLinked) }
     var suggested by remember { mutableStateOf<Place?>(null) }
     var placeConfirmed by remember { mutableStateOf(app.homePlace != null) }
+    // Celebrations only for what happens on this visit: "linked" stamps in and Scout hops; the pin drops on confirm.
+    var justLinked by remember { mutableStateOf(false) }
+    var linkDone by remember { mutableStateOf(false) }
+    var pinDropped by remember { mutableStateOf(false) }
+    var placeDone by remember { mutableStateOf(false) }
+    var hop by remember { mutableStateOf(false) }
 
     fun complete() {
         val token = setupTokenId ?: return
         busy = true; error = null
         scope.launch {
             runCatching { app.api.completePayPalLink(token) }
-                .onSuccess { r -> linked = r.paypalLinked; linkedEmail = r.email; suggested = r.suggestedPlace; app.refresh() }
+                .onSuccess { r ->
+                    busy = false
+                    linkDone = true; justLinked = true; hop = true
+                    delay(DONE_PAUSE_MS + 250)
+                    linked = r.paypalLinked; linkedEmail = r.email; suggested = r.suggestedPlace; linkDone = false
+                    app.refresh()
+                    delay(900); hop = false
+                }
                 .onFailure { error = it.friendly() }
             busy = false
         }
@@ -129,22 +182,28 @@ fun LinkPayPalScreen(app: AppState) {
         StepHeader(1, onBack = { app.back() })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Gap(10.dp)
-            Text("First, how should I pay?", style = hand(34.sp))
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text("First, how should I pay?", style = hand(34.sp), modifier = Modifier.weight(1f))
+                Dog(58.dp, if (hop) DogMood.Excited else DogMood.Wag)
+            }
             Text("Link PayPal once. I'll only spend inside the house rules you set next.", style = body(16.sp, color = Ink.Muted))
-            PayPalCard(linked, linkedEmail)
+            PayPalCard(linked, linkedEmail, stampIt = justLinked)
             PaperNote(tilt = 1f) {
                 Text("with PayPal I can…", style = body(13.sp, FontWeight.SemiBold, Ink.Muted))
-                Text("✓  buy things that fit your rules", style = hand(20.sp))
-                Text("✓  ask you before anything else", style = hand(20.sp))
-                Text("✗  never see your password", style = hand(20.sp))
+                listOf(true to "buy things that fit your rules", true to "ask you before anything else", false to "never see your password").forEachIndexed { i, (yes, line) ->
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TickOrCross(yes, Modifier.size(18.dp), delayMs = 300 + 220 * i)
+                        Text(line, style = hand(20.sp), modifier = Modifier.riseIn(300 + 220 * i + 120, distance = 6.dp))
+                    }
+                }
             }
             val place = suggested ?: app.places.firstOrNull { it.suggested }
             if (linked && place != null && !placeConfirmed) {
-                Text("Where should I deliver?", style = hand(28.sp))
-                PlaceCard(place, "from your PayPal account")
+                Text("Where should I deliver?", style = hand(28.sp), modifier = Modifier.riseIn())
+                PlaceCard(place, "from your PayPal account", Modifier.noteSlideIn(150))
             } else if (linked && app.homePlace != null) {
                 Text("Delivering to", style = body(13.sp, FontWeight.SemiBold, Ink.Muted))
-                PlaceCard(app.homePlace!!, null)
+                PlaceCard(app.homePlace!!, null, pinned = true, dropPin = pinDropped)
             }
             ErrorNote(error)
         }
@@ -167,14 +226,19 @@ fun LinkPayPalScreen(app: AppState) {
                     )
                 }
                 !linked -> {
-                    PillButton("I approved it in PayPal", loading = busy, onClick = { complete() })
-                    PillButton("Open PayPal again", dark = false, height = 52.dp, onClick = { setupTokenId = null })
+                    PillButton("I approved it in PayPal", loading = busy, done = linkDone, onClick = { complete() })
+                    if (!linkDone) PillButton("Open PayPal again", dark = false, height = 52.dp, onClick = { setupTokenId = null })
                 }
-                place != null && !placeConfirmed -> PillButton("Deliver here", loading = busy, onClick = {
+                place != null && !placeConfirmed -> PillButton("Deliver here", loading = busy, done = placeDone, onClick = {
                     busy = true
                     scope.launch {
                         runCatching { app.api.confirmPlace(place.placeId) }
-                            .onSuccess { placeConfirmed = true; app.refresh() }
+                            .onSuccess {
+                                busy = false; placeDone = true
+                                delay(DONE_PAUSE_MS)
+                                pinDropped = true; placeConfirmed = true; placeDone = false
+                                app.refresh()
+                            }
                             .onFailure { error = it.friendly() }
                         busy = false
                     }
@@ -185,8 +249,20 @@ fun LinkPayPalScreen(app: AppState) {
     }
 }
 
+/** ✓ (or ✗) drawn by pen after [delayMs]. */
 @Composable
-private fun PayPalCard(linked: Boolean, email: String?) {
+private fun TickOrCross(yes: Boolean, modifier: Modifier, delayMs: Int) {
+    if (yes) CheckMark(Ink.Ink, modifier, durationMs = 260, delayMs = delayMs, strokeWidth = 2.4.dp)
+    else PathDraw(modifier, color = Ink.Accent, strokeWidth = 2.4.dp, durationMs = 260, delayMs = delayMs) { s ->
+        listOf(
+            Path().apply { moveTo(s.width * 0.18f, s.height * 0.18f); lineTo(s.width * 0.82f, s.height * 0.82f) },
+            Path().apply { moveTo(s.width * 0.82f, s.height * 0.2f); lineTo(s.width * 0.2f, s.height * 0.82f) },
+        )
+    }
+}
+
+@Composable
+private fun PayPalCard(linked: Boolean, email: String?, stampIt: Boolean) {
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Ink.White).border(1.dp, Ink.NoteBorder, RoundedCornerShape(24.dp)).padding(18.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -198,19 +274,35 @@ private fun PayPalCard(linked: Boolean, email: String?) {
             Text("PayPal", style = body(17.sp, FontWeight.SemiBold))
             Text(email ?: "sandbox account", style = body(13.sp, color = Ink.Muted))
         }
-        Box(Modifier.clip(RoundedCornerShape(999.dp)).background(if (linked) Ink.Ink else Ink.Pill).padding(horizontal = 12.dp, vertical = 6.dp)) {
-            Text(if (linked) "linked" else "not linked", style = body(12.sp, FontWeight.SemiBold, if (linked) Ink.White else Ink.Muted))
+        when {
+            linked && stampIt -> Stamp("LINKED ✓", color = Ink.Ink, rotation = -8f, fontSize = 13.sp)
+            else -> Box(Modifier.clip(RoundedCornerShape(999.dp)).background(if (linked) Ink.Ink else Ink.Pill).padding(horizontal = 12.dp, vertical = 6.dp)) {
+                Text(if (linked) "linked" else "not linked", style = body(12.sp, FontWeight.SemiBold, if (linked) Ink.White else Ink.Muted))
+            }
         }
     }
 }
 
+/** An address on a paper note. [pinned]: a black pin holds it; [dropPin] drops the pin in (on confirm). */
 @Composable
-fun PlaceCard(place: Place, note: String?) {
-    PaperNote(tilt = -0.6f, modifier = Modifier.fillMaxWidth()) {
-        Text(place.label.ifBlank { "Home" }, style = body(16.sp, FontWeight.SemiBold))
-        Text(place.fullName, style = body(14.sp, color = Ink.Muted))
-        Text(place.oneLine, style = body(14.sp, color = Ink.Muted))
-        if (note != null) Text(note, style = hand(18.sp))
+fun PlaceCard(place: Place, note: String?, modifier: Modifier = Modifier, pinned: Boolean = false, dropPin: Boolean = false) {
+    Box(modifier.fillMaxWidth()) {
+        PaperNote(tilt = -0.6f, modifier = Modifier.fillMaxWidth().padding(top = if (pinned) 8.dp else 0.dp)) {
+            Text(place.label.ifBlank { "Home" }, style = body(16.sp, FontWeight.SemiBold))
+            Text(place.fullName, style = body(14.sp, color = Ink.Muted))
+            Text(place.oneLine, style = body(14.sp, color = Ink.Muted))
+            if (note != null) Text(note, style = hand(18.sp))
+        }
+        if (pinned) {
+            val reduce = LocalReduceMotion.current
+            val drop = remember { androidx.compose.animation.core.Animatable(if (dropPin && !reduce) 0f else 1f) }
+            LaunchedEffect(Unit) { drop.animateTo(1f, uiSpring(stiffness = 420f, damping = 0.6f)) }
+            Box(
+                Modifier.align(Alignment.TopCenter).size(20.dp).graphicsLayer {
+                    translationY = (1f - drop.value) * -46.dp.toPx(); alpha = (drop.value * 3f).coerceAtMost(1f)
+                }.shadow(3.dp, CircleShape).clip(CircleShape).background(Ink.Ink),
+            )
+        }
     }
 }
 
@@ -223,22 +315,26 @@ fun RulesEditor(initial: HouseRules, onChange: (HouseRules) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Monthly budget", style = body(14.sp, FontWeight.SemiBold, Ink.Muted))
-            Text(buildAnnotatedString { append(money(r.monthlyBudget)); withStyle(SpanStyle(fontFamily = Fonts.serif, fontStyle = FontStyle.Italic, fontSize = 20.sp, color = Ink.Grey)) { append(" a month") } }, style = body(34.sp, FontWeight.Medium))
+            AmountField(r.monthlyBudget, { update(r.copy(monthlyBudget = it)) }, " a month")
             Segmented(listOf(100.0, 200.0, 500.0), r.monthlyBudget, { money(it) }, { update(r.copy(monthlyBudget = it)) })
         }
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Buy without asking, up to", style = body(14.sp, FontWeight.SemiBold, Ink.Muted))
-            Text(buildAnnotatedString { append(money(r.perItemLimit)); withStyle(SpanStyle(fontFamily = Fonts.serif, fontStyle = FontStyle.Italic, fontSize = 20.sp, color = Ink.Grey)) { append(" per item") } }, style = body(34.sp, FontWeight.Medium))
+            AmountField(
+                r.perItemLimit, { update(r.copy(perItemLimit = it)) }, " per item",
+                warning = if (r.perItemLimit > r.monthlyBudget) "That's more than your monthly budget" else null,
+            )
             Segmented(listOf(25.0, 50.0, 75.0, 100.0), r.perItemLimit, { money(it) }, { update(r.copy(perItemLimit = it)) })
-            if (r.perItemLimit > r.monthlyBudget) ErrorNote("That's more than your monthly budget")
+            // How much of the month one auto-buy can take.
+            BudgetBar((r.perItemLimit / r.monthlyBudget).toFloat(), color = if (r.perItemLimit > r.monthlyBudget) Ink.Accent else Ink.Ink)
             Text("Anything over this asks for your fingerprint.", style = hand(18.sp, Ink.Muted))
         }
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("I can shop for…", style = hand(24.sp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                ShopCategory.entries.forEach { c ->
+                ShopCategory.entries.forEachIndexed { i, c ->
                     val on = c.slug in r.allowedCategories
-                    Chip(c.label, on, onClick = {
+                    Chip(c.label, on, check = true, modifier = Modifier.popIn(200 + 45 * i), onClick = {
                         update(r.copy(allowedCategories = if (on) r.allowedCategories - c.slug else r.allowedCategories + c.slug))
                     })
                 }
@@ -253,18 +349,11 @@ fun RulesEditor(initial: HouseRules, onChange: (HouseRules) -> Unit) {
 }
 
 @Composable
-fun Toggle(label: String, on: Boolean, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable { onChange(!on) }, verticalAlignment = Alignment.CenterVertically) {
-        Text(label, style = body(15.sp, FontWeight.Medium), modifier = Modifier.weight(1f))
-        Switch(on, onChange, colors = SwitchDefaults.colors(checkedTrackColor = Ink.Ink, uncheckedTrackColor = Color(0xFFD6D6D2), uncheckedBorderColor = Color.Transparent, uncheckedThumbColor = Ink.White))
-    }
-}
-
-@Composable
 fun OnbRulesScreen(app: AppState) {
     val scope = rememberCoroutineScope()
     var rules by remember { mutableStateOf(app.rules ?: HouseRules()) }
     var busy by remember { mutableStateOf(false) }
+    var done by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     Column(Modifier.fillMaxSize().dotted().padding(top = 52.dp, bottom = 34.dp)) {
         StepHeader(2, onBack = { app.back() })
@@ -275,11 +364,11 @@ fun OnbRulesScreen(app: AppState) {
             RulesEditor(rules) { rules = it }
             ErrorNote(error)
         }
-        PillButton("Looks good", loading = busy, enabled = rules.allowedCategories.isNotEmpty(), modifier = Modifier.padding(horizontal = 20.dp), onClick = {
+        PillButton("Looks good", loading = busy, done = done, enabled = rules.allowedCategories.isNotEmpty(), modifier = Modifier.padding(horizontal = 20.dp), onClick = {
             busy = true; error = null
             scope.launch {
                 runCatching { app.api.setRules(rules) }
-                    .onSuccess { app.rules = it; app.go(Screen.OnbSizes) }
+                    .onSuccess { app.rules = it; busy = false; done = true; delay(DONE_PAUSE_MS); app.go(Screen.OnbSizes) }
                     .onFailure { error = it.friendly() }
                 busy = false
             }
@@ -290,60 +379,76 @@ fun OnbRulesScreen(app: AppState) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun OnbSizesScreen(app: AppState) {
+    val scope = rememberCoroutineScope()
     var s by remember { mutableStateOf(app.sizes.let { if (it.top == null) it.copy(top = "M", waist = "32", fit = "Regular") else it }) }
-    var shoeScale by remember { mutableStateOf("US") }
+    var shoeScale by remember { mutableStateOf(app.sizes.shoe?.substringBefore(' ')?.takeIf { it in setOf("US", "UK", "EU") } ?: "US") }
+    var done by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().dotted().padding(top = 52.dp, bottom = 34.dp)) {
         StepHeader(3, onBack = { app.back() })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text("What size are you?", style = hand(34.sp))
             Text("So I never fetch the wrong fit.", style = body(16.sp, color = Ink.Muted))
-            SizeRow("Tops", listOf("XS", "S", "M", "L", "XL", "XXL"), s.top) { s = s.copy(top = it) }
-            SizeRow("Waist", listOf("28", "30", "32", "34", "36", "38"), s.waist) { s = s.copy(waist = it) }
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            SizeRow("Tops", listOf("XS", "S", "M", "L", "XL", "XXL"), s.top, 0) { s = s.copy(top = it) }
+            SizeRow("Waist", listOf("28", "30", "32", "34", "36", "38"), s.waist, 1) { s = s.copy(waist = it) }
+            Column(Modifier.riseIn(2 * 70 + 150), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Shoes", style = body(14.sp, FontWeight.SemiBold, Ink.Muted), modifier = Modifier.weight(1f))
                     Segmented(listOf("US", "UK", "EU"), shoeScale, { it }, { shoeScale = it }, Modifier.width(180.dp))
                 }
-                val shoes = when (shoeScale) { "UK" -> (5..11).map { "UK $it" }; "EU" -> (38..45).map { "EU $it" }; else -> (6..12).map { "US $it" } }
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    shoes.forEach { v -> Chip(v.substringAfter(' '), s.shoe == v, onClick = { s = s.copy(shoe = v) }) }
-                }
+                // Same seven slots in every scale, so switching flips the numbers in place.
+                val shoes = when (shoeScale) { "UK" -> (5..11).map { "UK $it" }; "EU" -> (39..45).map { "EU $it" }; else -> (6..12).map { "US $it" } }
+                SizePicker(shoes, s.shoe, { s = s.copy(shoe = it) }, display = { it.substringAfter(' ') }, flipKey = shoeScale)
             }
-            SizeRow("Fit", listOf("Slim", "Regular", "Relaxed"), s.fit) { s = s.copy(fit = it) }
-            Toggle("Ask me if I'm unsure", s.askIfUnsure) { s = s.copy(askIfUnsure = it) }
+            SizeRow("Fit", listOf("Slim", "Regular", "Relaxed"), s.fit, 3) { s = s.copy(fit = it) }
+            Box(Modifier.riseIn(4 * 70 + 150)) { Toggle("Ask me if I'm unsure", s.askIfUnsure) { s = s.copy(askIfUnsure = it) } }
         }
         Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             // From Account (already onboarded) this is an edit: go back instead of on to "Meet your fetcher".
-            PillButton(if (app.onboarded) "Save" else "Save my sizes", onClick = { app.saveSizes(s); if (app.onboarded) app.back() else app.go(Screen.Ready) })
-            if (!app.onboarded) PillButton("Skip, ask me later", dark = false, height = 52.dp, onClick = { app.go(Screen.Ready) })
+            PillButton(if (app.onboarded) "Save" else "Save my sizes", done = done, onClick = {
+                app.saveSizes(s)
+                scope.launch { done = true; delay(DONE_PAUSE_MS); if (app.onboarded) app.back() else app.go(Screen.Ready) }
+            })
+            if (!app.onboarded) PillButton("Skip, ask me later", dark = false, height = 52.dp, modifier = Modifier.wiggleAfterIdle(s), onClick = { app.go(Screen.Ready) })
         }
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun SizeRow(label: String, options: List<String>, selected: String?, onPick: (String) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+private fun SizeRow(label: String, options: List<String>, selected: String?, index: Int, onPick: (String) -> Unit) {
+    Column(Modifier.riseIn(index * 70 + 150), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(label, style = body(14.sp, FontWeight.SemiBold, Ink.Muted))
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            options.forEach { o -> Chip(o, o == selected, onClick = { onPick(o) }) }
-        }
+        SizePicker(options, selected, onPick)
     }
 }
 
+/**
+ * Meet your fetcher: Scout pops in big and tilts his head while you type a name. "Start fetching": he runs off
+ * the right edge, then the camera screen slides up (App.screenTransition).
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ReadyScreen(app: AppState) {
+    val scope = rememberCoroutineScope()
     var name by remember { mutableStateOf(if (app.dogName == "Scout") "" else app.dogName) }
+    var typing by remember { mutableStateOf(false) }
+    var typed by remember { mutableStateOf(false) }
+    var leaving by remember { mutableStateOf(false) }
+    val reduce = LocalReduceMotion.current
+    LaunchedEffect(name) { if (typed) { typing = true; delay(700); typing = false } }
+    val tilt by animateFloatAsState(if (typing) 12f else 0f, uiSpring(stiffness = 300f), label = "tilt")
     Column(Modifier.fillMaxSize().dotted().padding(top = 52.dp, bottom = 34.dp)) {
         StepHeader(4, onBack = { app.back() })
         Column(Modifier.weight(1f).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text("Meet your fetcher.", style = hand(36.sp))
-            Mascot(150.dp, Modifier.align(Alignment.CenterHorizontally).rotate(-3f))
+            BoxWithConstraints(Modifier.fillMaxWidth().height(190.dp), contentAlignment = Alignment.Center) {
+                val runOff = rememberProgress(leaving, 450, easing = androidx.compose.animation.core.FastOutLinearInEasing)
+                if (leaving) RunningDog(150.dp, Modifier.graphicsLayer { translationX = runOff.value * (maxWidth / 2 + 150.dp).toPx() }, ground = false)
+                else Dog(150.dp, DogMood.Wag, Modifier.popIn(150).graphicsLayer { rotationZ = -3f }, headTilt = tilt)
+            }
             Text("What should I call them?", style = body(14.sp, FontWeight.SemiBold, Ink.Muted))
             Box(Modifier.fillMaxWidth().height(60.dp).clip(RoundedCornerShape(999.dp)).background(Ink.Pill).padding(horizontal = 22.dp), contentAlignment = Alignment.CenterStart) {
                 if (name.isEmpty()) Text("Scout", style = hand(26.sp, Ink.LightGrey))
-                BasicTextField(name, { name = it.take(20) }, singleLine = true, textStyle = hand(26.sp), modifier = Modifier.fillMaxWidth())
+                BasicTextField(name, { name = it.take(20); typed = true }, singleLine = true, textStyle = hand(26.sp), modifier = Modifier.fillMaxWidth())
             }
             Text("all set:", style = hand(20.sp, Ink.Muted))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -353,13 +458,14 @@ fun ReadyScreen(app: AppState) {
                     app.rules?.let { "auto-buy up to ${money(it.perItemLimit)}" },
                     app.homePlace?.let { "ships to ${it.label}" },
                     app.sizes.top?.let { "size $it" },
-                ).forEach { Chip(it, false, onClick = {}) }
+                ).forEachIndexed { i, label -> Chip(label, false, onClick = {}, modifier = Modifier.popIn(400 + 60 * i)) }
             }
         }
         // From Account (already onboarded) this is a rename.
-        PillButton(if (app.onboarded) "Save" else "Start fetching", modifier = Modifier.padding(horizontal = 20.dp), onClick = {
+        PillButton(if (app.onboarded) "Save" else "Start fetching", enabled = !leaving, modifier = Modifier.padding(horizontal = 20.dp), onClick = {
             app.saveDogName(name)
-            if (app.onboarded) app.back() else app.finishOnboarding()
+            if (app.onboarded) app.back()
+            else scope.launch { leaving = true; delay(if (reduce) 0 else 460); app.finishOnboarding() }
         })
     }
 }

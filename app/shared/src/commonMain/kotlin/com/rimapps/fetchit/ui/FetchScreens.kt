@@ -1,5 +1,8 @@
 package com.rimapps.fetchit.ui
 
+import com.rimapps.fetchit.ui.components.PillButton
+import com.rimapps.fetchit.ui.components.Chip
+import com.rimapps.fetchit.ui.components.Segmented
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -58,6 +61,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.rimapps.fetchit.FetchSession
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import com.rimapps.fetchit.ui.components.Press
+import com.rimapps.fetchit.ui.components.grayPress
+import com.rimapps.fetchit.ui.components.pressScale
+import com.rimapps.fetchit.ui.components.roundButton
+import com.rimapps.fetchit.ui.motion.rememberHaptics
 import com.rimapps.fetchit.ui.motion.Dog
 import com.rimapps.fetchit.ui.motion.DogMood
 import com.rimapps.fetchit.ui.motion.HandwritingReveal
@@ -80,18 +92,18 @@ import com.rimapps.fetchit.platform.rememberPhotoSource
 @Composable
 fun BottomNav(app: AppState, photos: PhotoSource) {
     val current = app.screen
+    val haptics = rememberHaptics()
     Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 26.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         listOf(Screen.Fetch to "Fetch", Screen.Activity to "Activity", Screen.Rules to "Rules").forEach { (s, label) ->
             val on = current == s
             Box(
-                Modifier.height(64.dp).width(if (on) 98.dp else 86.dp).clip(RoundedCornerShape(32.dp)).background(if (on) Ink.Ink else Ink.Pill)
-                    .clickable(role = Role.Tab) { app.reset(s) },
+                Modifier.height(64.dp).width(if (on) 98.dp else 86.dp).grayPress({ if (!on) haptics.tick(); app.reset(s) }, Role.Tab, RoundedCornerShape(32.dp)).background(if (on) Ink.Ink else Ink.Pill),
                 contentAlignment = Alignment.Center,
             ) { Text(label, style = body(13.sp, if (on) FontWeight.SemiBold else FontWeight.Medium, if (on) Ink.White else Ink.NavGrey)) }
         }
         Spacer()
         Box(
-            Modifier.size(64.dp).shadow(6.dp, CircleShape).clip(CircleShape).background(Ink.White).clickable(role = Role.Button) { photos.pickPhoto() },
+            Modifier.size(64.dp).shadow(6.dp, CircleShape).roundButton({ photos.pickPhoto() }).background(Ink.White),
             contentAlignment = Alignment.Center,
         ) { Text("+", style = body(30.sp, FontWeight.Medium)) }
     }
@@ -117,7 +129,7 @@ fun FetchScreen(app: AppState) {
         Column(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 22.dp, top = 58.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("What should I fetch?", style = hand(32.sp), modifier = Modifier.weight(1f))
-                Box(Modifier.size(44.dp).clip(CircleShape).background(Ink.Ink).clickable { app.go(Screen.Account) }, contentAlignment = Alignment.Center) {
+                Box(Modifier.size(44.dp).roundButton({ app.go(Screen.Account) }).background(Ink.Ink), contentAlignment = Alignment.Center) {
                     Text(app.dogName.take(1).uppercase(), style = body(15.sp, FontWeight.SemiBold, Ink.White))
                 }
             }
@@ -159,7 +171,7 @@ fun FetchScreen(app: AppState) {
                         }
                     }
                     Gap(16.dp)
-                    Box(Modifier.size(78.dp).shadow(6.dp, CircleShape).clip(CircleShape).background(Ink.White).clickable(role = Role.Button) { photos.takePhoto() }, contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(78.dp).shadow(6.dp, CircleShape).roundButton({ photos.takePhoto() }).background(Ink.White), contentAlignment = Alignment.Center) {
                         Box(Modifier.size(58.dp).clip(CircleShape).background(Ink.Ink))
                     }
                 }
@@ -409,14 +421,26 @@ fun ResultsScreen(app: AppState) {
  * A tap that only counts when the press *starts* while [enabled]: a finger already down when Buy appears or
  * arms can't complete a purchase on release. Keeps button semantics for accessibility.
  */
-private fun Modifier.buyGesture(enabled: Boolean, onBuy: () -> Unit): Modifier = this
-    .semantics { role = Role.Button; if (enabled) onClick { onBuy(); true } else disabled() }
-    .pointerInput(enabled) {
-        detectTapGestures(onPress = {
-            val armedAtPress = enabled
-            if (tryAwaitRelease() && armedAtPress) onBuy()
-        })
-    }
+@Composable
+private fun Modifier.buyGesture(enabled: Boolean, onBuy: () -> Unit): Modifier {
+    // Press feel (sink 0.96, spring back, light haptic) is visual only; the armed check below is what counts.
+    val source = remember { MutableInteractionSource() }
+    val haptics = rememberHaptics()
+    val scope = rememberCoroutineScope()
+    return this
+        .pressScale(source, Press.PILL)
+        .semantics { role = Role.Button; if (enabled) onClick { onBuy(); true } else disabled() }
+        .pointerInput(enabled) {
+            detectTapGestures(onPress = { offset ->
+                val armedAtPress = enabled
+                val press = PressInteraction.Press(offset)
+                scope.launch { source.emit(press) }
+                val released = tryAwaitRelease()
+                scope.launch { source.emit(if (released) PressInteraction.Release(press) else PressInteraction.Cancel(press)) }
+                if (released && armedAtPress) { haptics.tap(); onBuy() }
+            })
+        }
+}
 
 @OptIn(ExperimentalUuidApi::class)
 private fun newRequestId() = Uuid.random().toHexString()

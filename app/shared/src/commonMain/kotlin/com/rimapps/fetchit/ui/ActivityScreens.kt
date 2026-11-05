@@ -1,5 +1,7 @@
 package com.rimapps.fetchit.ui
 
+import com.rimapps.fetchit.ui.components.PillButton
+import com.rimapps.fetchit.ui.components.Chip
 import androidx.compose.foundation.background
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
@@ -158,6 +160,7 @@ fun RulesScreen(app: AppState) {
     val saved = app.rules ?: HouseRules()
     var draft by remember(app.rules) { mutableStateOf(saved) }
     var busy by remember { mutableStateOf(false) }
+    var done by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) { app.refresh() }
     MainScaffold(app) {
@@ -177,10 +180,12 @@ fun RulesScreen(app: AppState) {
                 RulesEditor(saved) { draft = it }
                 ErrorNote(error)
             }
-            if (draft != saved) PillButton("Save rules", loading = busy, enabled = draft.allowedCategories.isNotEmpty(), modifier = Modifier.padding(horizontal = 20.dp), onClick = {
+            if (draft != saved || done) PillButton("Save rules", loading = busy, done = done, enabled = draft.allowedCategories.isNotEmpty(), modifier = Modifier.padding(horizontal = 20.dp), onClick = {
                 busy = true; error = null
                 scope.launch {
-                    runCatching { app.api.setRules(draft) }.onSuccess { app.rules = it }.onFailure { error = it.friendly() }
+                    runCatching { app.api.setRules(draft) }
+                        .onSuccess { busy = false; done = true; delay(600); app.rules = it; done = false }
+                        .onFailure { error = it.friendly() }
                     busy = false
                 }
             })

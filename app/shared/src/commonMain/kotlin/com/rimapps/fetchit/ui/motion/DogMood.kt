@@ -126,15 +126,16 @@ private fun pose(mood: DogMood, t: Long, bone: Boolean, shake: Float): DogPose {
     }
 }
 
-/** Scout in a [mood]. Loops run forever (they're idle loops); HeadShake shakes once, then breathes. */
+/** Scout in a [mood]. Loops run forever (they're idle loops); HeadShake shakes once, then breathes. [headTilt] adds a tilt (curious). */
 @Composable
-fun Dog(size: Dp = 120.dp, mood: DogMood = DogMood.Wag, modifier: Modifier = Modifier, bone: Boolean = false) {
+fun Dog(size: Dp = 120.dp, mood: DogMood = DogMood.Wag, modifier: Modifier = Modifier, bone: Boolean = false, headTilt: Float = 0f) {
     val clock = rememberClock()
     val shake = rememberProgress(mood, 620, 120)
     Canvas(modifier.size(size, size * 1.12f)) {
         val t = clock.value
         scale(this.size.width / 100f, this.size.height / 112f, pivot = Offset.Zero) {
-            drawDog(pose(mood, t, bone, if (mood == DogMood.HeadShake) shake.value else 0f))
+            val p = pose(mood, t, bone, if (mood == DogMood.HeadShake) shake.value else 0f)
+            drawDog(if (headTilt == 0f) p else p.copy(headTilt = p.headTilt + headTilt))
         }
     }
 }
