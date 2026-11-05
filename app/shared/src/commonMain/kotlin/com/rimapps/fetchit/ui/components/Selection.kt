@@ -1,9 +1,5 @@
 package com.rimapps.fetchit.ui.components
 
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.graphics.vector.rememberVectorPainter
-import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.foundation.Image
 import com.rimapps.fetchit.ui.icons.DoodleIcon
 import com.rimapps.fetchit.ui.icons.Doodle
 import androidx.compose.animation.AnimatedVisibility
@@ -177,12 +173,9 @@ fun SizePicker(options: List<String>, selected: String?, onPick: (String) -> Uni
                     .grayPress({ if (!on) { haptics.tick(); onPick(o) } }, Role.RadioButton, RoundedCornerShape(23.dp)),
                 contentAlignment = Alignment.Center,
             ) {
-                // The doodle circle (static icon) around the pick, faded in.
-                val ring by animateFloatAsState(if (on) 1f else 0f, tween(200), label = "ring")
-                if (ring > 0f) Image(
-                    rememberVectorPainter(Doodle.Circle.vector(3.6f)), null, Modifier.matchParentSize().graphicsLayer { alpha = ring },
-                    contentScale = ContentScale.FillBounds, colorFilter = ColorFilter.tint(Ink.Ink),
-                )
+                if (on) PathDraw(Modifier.matchParentSize(), strokeWidth = 2.2.dp, durationMs = 300, key = o) { s ->
+                    listOf(wobblyLoop(Rect(Offset(s.width * 0.08f, s.height * 0.1f), Size(s.width * 0.84f, s.height * 0.8f)), seed = i + 3))
+                }
                 FlipText(display(o), flipKey, i * 30, body(16.sp, if (on) FontWeight.Bold else FontWeight.Medium, if (on) Ink.Ink else Ink.NavGrey))
             }
         }

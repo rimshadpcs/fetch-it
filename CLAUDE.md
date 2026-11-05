@@ -559,4 +559,5 @@ inactive. No Material icons. Adding one: copy its `<path d>` values from `npm pa
       sliding pill, icon pop, approval dot; "+" and the Fetch header's profile circle removed; You tab; Rules pushed
       with focus; doodle icons for tabs, search (sniffing), check (prices checked, paid activity), star + arrow (my
       pick), map-pin (ship to, places), pencil (edit), heart (fetched), bell / gear / lock / help / log-out / ruler / dog /
-      shield-check (You), circle (size pick). Mic has no screen yet (voice isn't built). Builds; not yet seen on a device.
+      shield-check (You). Size picks keep the hand-drawn pen loop (`wobblyLoop` drawn on), not the doodle circle icon.
+      Mic has no screen yet (voice isn't built). Builds; not yet seen on a device.
