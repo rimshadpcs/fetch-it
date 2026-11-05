@@ -44,6 +44,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import androidx.compose.foundation.Image
+import org.jetbrains.compose.resources.DrawableResource
+import org.jetbrains.compose.resources.painterResource
 import com.rimapps.fetchit.ui.components.roundButton
 import com.rimapps.fetchit.ui.motion.rememberProgress
 
@@ -71,12 +74,12 @@ fun PaperNote(modifier: Modifier = Modifier, tilt: Float = -0.8f, content: @Comp
     )
 }
 
-/** Polaroid with a black pin; caption in handwriting. */
+/** Polaroid with a black pin; caption in handwriting. The photo is [imageUrl], or a bundled [image]. */
 @Composable
-fun Polaroid(imageUrl: String?, caption: String?, modifier: Modifier = Modifier, tilt: Float = -4f, imageHeight: Dp = 190.dp) {
+fun Polaroid(imageUrl: String?, caption: String?, modifier: Modifier = Modifier, tilt: Float = -4f, imageHeight: Dp = 190.dp, image: DrawableResource? = null) {
     Box(modifier.rotate(tilt)) {
         Column(Modifier.background(Ink.Pill).padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = if (caption != null) 14.dp else 12.dp)) {
-            ProductImage(imageUrl, Modifier.fillMaxWidth().height(imageHeight))
+            ProductImage(imageUrl, Modifier.fillMaxWidth().height(imageHeight), image)
             if (caption != null) Text(caption, style = hand(if (caption.length > 9) 20.sp else 28.sp), maxLines = 1, softWrap = false, modifier = Modifier.padding(top = 8.dp, start = 4.dp))
         }
         Box(Modifier.align(Alignment.TopCenter).padding(top = 0.dp).size(24.dp).graphicsLayer { translationY = -10.dp.toPx() }
@@ -85,9 +88,10 @@ fun Polaroid(imageUrl: String?, caption: String?, modifier: Modifier = Modifier,
 }
 
 @Composable
-fun ProductImage(url: String?, modifier: Modifier = Modifier) {
+fun ProductImage(url: String?, modifier: Modifier = Modifier, image: DrawableResource? = null) {
     Box(modifier.background(Color(0xFFD9D3C9))) {
-        if (url != null) AsyncImage(url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        if (image != null) Image(painterResource(image), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        else if (url != null) AsyncImage(url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
     }
 }
 

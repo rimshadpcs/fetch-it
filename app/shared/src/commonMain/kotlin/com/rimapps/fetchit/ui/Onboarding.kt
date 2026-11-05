@@ -43,6 +43,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rimapps.fetchit.AppState
+import fetchit.shared.generated.resources.Res
+import fetchit.shared.generated.resources.welcome_lamp
+import fetchit.shared.generated.resources.welcome_polo
 import com.rimapps.fetchit.Screen
 import com.rimapps.fetchit.data.HouseRules
 import com.rimapps.fetchit.data.Place
@@ -87,11 +90,11 @@ fun WelcomeScreen(app: AppState) {
         Text("Fetch It", style = body(22.sp, color = Ink.LightGrey), modifier = Modifier.align(Alignment.End).padding(top = 58.dp, end = 26.dp))
         Box(Modifier.fillMaxWidth().height(340.dp)) {
             Box(Modifier.offset(36.dp, 30.dp).pinIn(0, tilt = 0f)) {
-                Polaroid(null, "mushroom lamp", Modifier.width(190.dp), tilt = -6f, imageHeight = 150.dp)
+                Polaroid(null, "mushroom lamp", Modifier.width(190.dp), tilt = -6f, imageHeight = 150.dp, image = Res.drawable.welcome_lamp)
                 Tape(Modifier.align(Alignment.TopCenter).offset(y = (-6).dp), rotation = -10f, delayMs = 380)
             }
             Box(Modifier.align(Alignment.TopEnd).offset((-30).dp, 120.dp).pinIn(2, tilt = 0f)) {
-                Polaroid(null, "tan sneakers", Modifier.width(170.dp), tilt = 5f, imageHeight = 130.dp)
+                Polaroid(null, "striped polo", Modifier.width(170.dp), tilt = 5f, imageHeight = 130.dp, image = Res.drawable.welcome_polo)
                 Tape(Modifier.align(Alignment.TopCenter).offset(y = (-4).dp), rotation = 8f, delayMs = 520)
             }
             Mascot(110.dp, Modifier.align(Alignment.BottomStart).offset(26.dp, 10.dp).riseIn(250))
