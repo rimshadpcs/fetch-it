@@ -24,6 +24,12 @@ class FetchApi(val firebase: Firebase = Firebase(httpClient())) {
     suspend fun completePayPalLink(setupTokenId: String): PayPalLinkResult =
         firebase.call("completePayPalLink", buildJsonObject { put("token", setupTokenId) }).to()
     suspend fun confirmPlace(placeId: String) { firebase.call("confirmPlace", buildJsonObject { put("placeId", placeId) }) }
+    /** Add (or, with placeId, edit) a saved place; field problems come back in FunctionsException.fields. */
+    suspend fun addPlace(form: PlaceForm): Place = firebase.call("addPlace", json.encodeToJsonElement(form)).to()
+    suspend fun deletePlace(placeId: String, newDefaultId: String? = null) {
+        firebase.call("deletePlace", buildJsonObject { put("placeId", placeId); newDefaultId?.let { put("newDefaultId", it) } })
+    }
+    suspend fun setDefaultPlace(placeId: String) { firebase.call("setDefaultPlace", buildJsonObject { put("placeId", placeId) }) }
     suspend fun setRules(rules: HouseRules): HouseRules = firebase.call("setRules", json.encodeToJsonElement(rules)).to()
 
     /** Only the fields given are changed (sizes: all four are sent, null clears one). */

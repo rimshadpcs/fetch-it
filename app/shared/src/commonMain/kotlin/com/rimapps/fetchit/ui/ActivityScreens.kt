@@ -214,7 +214,7 @@ fun AccountScreen(app: AppState) {
             Text("money & delivery", style = hand(22.sp, Ink.Muted))
             PaperNote(Modifier.fillMaxWidth(), tilt = 0f) {
                 Row2("PayPal", if (app.user.paypalLinked) "linked · sandbox" else "not linked") { if (!app.user.paypalLinked) app.go(Screen.LinkPayPal) }
-                Row2("Saved places", app.places.filter { !it.suggested }.joinToString(" · ") { "${it.label} · ${it.line1}" }.ifBlank { "none yet" }) { app.go(Screen.LinkPayPal) }
+                Row2("Saved places", app.savedPlaces.joinToString(" · ") { it.label + if (it.isDefault) " (default)" else "" }.ifBlank { "none yet" }) { app.go(Screen.Places) }
                 Row2("My sizes", listOfNotNull(app.sizes.top, app.sizes.waist?.let { "waist $it" }, app.sizes.shoe, app.sizes.fit?.lowercase()?.let { "$it fit" }).joinToString(" · ").ifBlank { "not set" }) { app.go(Screen.OnbSizes) }
                 Row2("House rules", app.rules?.let { "${money(it.monthlyBudget)} a month · auto-buy up to ${money(it.perItemLimit)}" } ?: "not set") { app.reset(Screen.Rules) }
             }

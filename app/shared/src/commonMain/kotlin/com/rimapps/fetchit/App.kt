@@ -45,6 +45,9 @@ import com.rimapps.fetchit.ui.FetchScreen
 import com.rimapps.fetchit.ui.FetchTheme
 import com.rimapps.fetchit.ui.Ink
 import com.rimapps.fetchit.ui.LinkPayPalScreen
+import com.rimapps.fetchit.ui.OnbDeliverScreen
+import com.rimapps.fetchit.ui.PlaceEditScreen
+import com.rimapps.fetchit.ui.PlacesScreen
 import com.rimapps.fetchit.ui.OnbRulesScreen
 import com.rimapps.fetchit.ui.OrderScreen
 import com.rimapps.fetchit.ui.OnbSizesScreen
@@ -87,6 +90,7 @@ fun App(register: ((() -> Boolean) -> Unit)? = null) {
                                 when (screen) {
                                     Screen.Welcome -> WelcomeScreen(app)
                                     Screen.LinkPayPal -> LinkPayPalScreen(app)
+                                    Screen.OnbDeliver -> OnbDeliverScreen(app)
                                     Screen.OnbRules -> OnbRulesScreen(app)
                                     Screen.OnbSizes -> OnbSizesScreen(app)
                                     Screen.Ready -> ReadyScreen(app)
@@ -94,6 +98,8 @@ fun App(register: ((() -> Boolean) -> Unit)? = null) {
                                     Screen.Activity -> ActivityScreen(app)
                                     Screen.Rules -> RulesScreen(app)
                                     Screen.Account -> AccountScreen(app)
+                                    Screen.Places -> PlacesScreen(app)
+                                    is Screen.PlaceEdit -> PlaceEditScreen(app, screen)
                                     Screen.MotionLab -> MotionLabScreen(app)
                                     Screen.WhichOne -> WhichOneScreen(app)
                                     Screen.Results -> ResultsScreen(app)
@@ -113,7 +119,7 @@ fun App(register: ((() -> Boolean) -> Unit)? = null) {
     }
 }
 
-private val ONBOARDING = listOf<Screen>(Screen.Welcome, Screen.LinkPayPal, Screen.OnbRules, Screen.OnbSizes, Screen.Ready)
+private val ONBOARDING = listOf<Screen>(Screen.Welcome, Screen.LinkPayPal, Screen.OnbDeliver, Screen.OnbRules, Screen.OnbSizes, Screen.Ready)
 
 /**
  * Onboarding steps slide like turning pages (back = the other way); "Start fetching" slides the camera screen up;

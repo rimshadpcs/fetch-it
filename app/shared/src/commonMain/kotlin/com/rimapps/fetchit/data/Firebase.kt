@@ -38,7 +38,10 @@ import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
 /** A callable function failed: `status` is the Firebase code (FAILED_PRECONDITION, …), `message` is user-facing. */
-class FunctionsException(val status: String, override val message: String) : Exception(message)
+class FunctionsException(val status: String, override val message: String, val details: JsonObject? = null) : Exception(message) {
+    /** Per-field problems a callable sent back (addPlace: `details.fields`), e.g. postalCode → "ZIP is 5 digits". */
+    val fields: Map<String, String> get() = (details?.get("fields") as? JsonObject)?.mapValues { (it.value as? JsonPrimitive)?.content ?: "" } ?: emptyMap()
+}
 
 /** App Check token header, verified by callables (ENFORCE_APP_CHECK) and Firestore. */
 private const val APP_CHECK = "X-Firebase-AppCheck"
@@ -174,7 +177,7 @@ class Firebase(private val http: HttpClient, private val store: KeyValueStore = 
 
     private fun JsonElement.toFunctionsException(): FunctionsException {
         val o = jsonObject
-        return FunctionsException(o["status"]?.jsonPrimitive?.content ?: "INTERNAL", o["message"]?.jsonPrimitive?.content ?: "Something went wrong.")
+        return FunctionsException(o["status"]?.jsonPrimitive?.content ?: "INTERNAL", o["message"]?.jsonPrimitive?.content ?: "Something went wrong.", o["details"] as? JsonObject)
     }
 
     // ---- Firestore reads (users/{uid}/… only; rules deny everything else) ----

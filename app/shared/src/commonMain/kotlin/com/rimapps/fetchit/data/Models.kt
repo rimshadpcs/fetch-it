@@ -101,10 +101,27 @@ data class Place(
     val state: String = "",
     val postalCode: String = "",
     val countryCode: String = "",
+    val phone: String? = null,
     val suggested: Boolean = false,
+    val isDefault: Boolean = false,
 ) {
     val oneLine get() = listOf(line1, city, "$state $postalCode".trim()).filter { it.isNotBlank() }.joinToString(", ")
 }
+
+/** What the address form sends to addPlace (placeId set = edit). */
+@Serializable
+data class PlaceForm(
+    val label: String = "Home",
+    val fullName: String = "",
+    val line1: String = "",
+    val line2: String = "",
+    val city: String = "",
+    val state: String = "",
+    val postalCode: String = "",
+    val phone: String = "",
+    val placeId: String? = null,
+    val makeDefault: Boolean = false,
+)
 
 @Serializable
 data class PayPalLinkResult(val paypalLinked: Boolean, val email: String? = null, val suggestedPlace: Place? = null)

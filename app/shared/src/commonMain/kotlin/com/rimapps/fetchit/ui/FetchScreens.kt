@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -321,13 +322,17 @@ fun ResultsScreen(app: AppState) {
     var picked by remember { mutableStateOf(r.offers.firstOrNull()) }
     val offer = picked?.takeIf { it in shown } ?: shown.firstOrNull()
     var size by remember(offer) { mutableStateOf(offer?.let { defaultSize(app, it) }) }
-    val place = app.homePlace
+    // Where it ships: the default place unless the user picks another in the sheet.
+    var placeId by remember { mutableStateOf(app.defaultPlace?.placeId) }
+    val place = app.savedPlaces.firstOrNull { it.placeId == placeId } ?: app.defaultPlace
+    var picking by remember { mutableStateOf(false) }
     // Buy only counts a press that starts after this screen has been on the display for a moment: a tap aimed
     // at the screen underneath (the Fetch "+" sits where Buy lands) must never buy. Measured from the first
-    // draw, not composition, because a slow device can compose long before it shows anything.
+    // draw, not composition, because a slow device can compose long before it shows anything. Closing the
+    // place sheet re-arms it the same way (the sheet's rows sit above Buy).
     var drawn by remember { mutableStateOf(false) }
     var armed by remember { mutableStateOf(false) }
-    LaunchedEffect(drawn) { if (drawn) { delay(800); armed = true } }
+    LaunchedEffect(drawn, picking) { armed = false; if (drawn && !picking) { delay(800); armed = true } }
 
     Box(Modifier.fillMaxSize().dotted()) {
         Column(Modifier.fillMaxSize().padding(top = 56.dp)) {
@@ -395,15 +400,15 @@ fun ResultsScreen(app: AppState) {
                 Modifier.fillMaxWidth().height(64.dp).shadow(8.dp, RoundedCornerShape(999.dp)).clip(RoundedCornerShape(999.dp)).background(Ink.White).padding(4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Column(Modifier.padding(start = 16.dp, end = 10.dp)) {
-                    Text("ship to", style = body(11.sp, FontWeight.SemiBold, Ink.Grey))
-                    Text(place?.label ?: "no address", style = body(16.sp, FontWeight.SemiBold))
+                Column(Modifier.widthIn(max = 120.dp).clip(RoundedCornerShape(999.dp)).clickable(role = Role.Button) { picking = true }.padding(start = 16.dp, end = 10.dp, top = 6.dp, bottom = 6.dp)) {
+                    Text("ship to ▾", style = body(11.sp, FontWeight.SemiBold, Ink.Grey))
+                    Text(place?.label ?: "add address", style = body(16.sp, FontWeight.SemiBold), maxLines = 1)
                 }
                 Box(
                     Modifier.weight(1f).height(56.dp).clip(RoundedCornerShape(999.dp)).background(Ink.Ink)
                         .drawWithContent { drawContent(); drawn = true }
                         .buyGesture(enabled = armed && offer != null && place != null) {
-                            app.go(Screen.Buying(offer!!, size, newRequestId()))
+                            app.go(Screen.Buying(offer!!, size, newRequestId(), place!!.placeId))
                         },
                     contentAlignment = Alignment.Center,
                 ) {
@@ -414,6 +419,7 @@ fun ResultsScreen(app: AppState) {
                 }
             }
         }
+        PlacePickerSheet(app, picking, place?.placeId, onPick = { placeId = it.placeId; picking = false }, onDismiss = { picking = false })
     }
 }
 

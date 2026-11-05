@@ -91,7 +91,10 @@ KMP app ──Firebase Auth──▶ Cloud Functions (TypeScript)
 | `setProfile` ✅ | `{sizes?: {top, waist, shoe, fit}, askIfUnsure?, dogName?}` → `users/{uid}/profile/main` (only the fields sent; null clears a size); ask-if-unsure mirrored with the rules doc both ways |
 | `startPayPalLink` ✅ | onboarding: Vault v3 setup token → approval URL; returns to `fetchit://paypal/return` / `…/cancel` |
 | `completePayPalLink` ✅ | `{token}` (setup token id): vault it, store token in `vault/{uid}` only, suggest PayPal's shipping address as Home, `users/{uid}.paypalLinked = true`. Nothing charged |
-| `confirmPlace` ✅ | `{placeId}`: user confirms a suggested place (suggested places don't count as saved until then) |
+| `confirmPlace` ✅ | `{placeId}`: user confirms a suggested place (suggested places don't count as saved until then); becomes the default unless another saved place is |
+| `addPlace` ✅ | `{label, fullName, line1, line2?, city, state, postalCode, phone?, placeId?, makeDefault?}`: US-validated (`lib/address.ts`; errors per field in `details.fields`), saved confirmed; placeId = edit; adding clears an unconfirmed PayPal suggestion; first place / makeDefault → default; labels unique; max 10 |
+| `deletePlace` ✅ | `{placeId, newDefaultId?}`: deleting the default needs `newDefaultId`; the only place can't go; its price watches move to the default |
+| `setDefaultPlace` ✅ | `{placeId}`: the place Buy starts with and watch buys ship to |
 | `advanceOrders` ✅ | scheduled every minute: demo orders placed → confirmed (30 s) → shipped (2 min, PayPal tracking) → delivered (promised date) |
 | `cancelOrder` ✅ | `{orderId}` before shipping: refund the sandbox capture, `cancelled`, roll back month-to-date spend |
 | `sweepStuckPurchases` ✅ | every 5 min: purchases stuck > 2 min in pending_undo/approved/charging → charge (idempotent) or fail |
@@ -180,7 +183,8 @@ Verify exact field names in PayPal's Orders v2 docs / AI Toolkit — don't guess
 - Functions base URL / emulator host from build config (local emulators vs deployed).
 
 ### Screens (design canvas: https://claude.ai/artifact/UE34q9KtegSSACTYXxCo8V)
-Onboarding: Welcome → Link PayPal → Set house rules → Where should I deliver? → Your sizes (optional) → Meet your fetcher (name the dog)
+Onboarding: Welcome → Link PayPal → Where should I deliver? (PayPal's address "from PayPal": Yes, deliver here / Use a
+different address → form) → Set house rules → Your sizes (optional) → Meet your fetcher (name the dog)
 Main: Fetch (camera / Upload / Voice) → Look what I found → Refine by voice → Fetched (auto-bought, undo) |
 Needs your OK (biometric) → Activity · House rules
 Bottom nav: Fetch · Activity · Rules + round "+" (upload).
@@ -529,3 +533,13 @@ state at once (haptics still play). Hidden **Motion lab** (long-press the dog on
       (first time at zara.com) → approved → PayPal `93P174878P978663V`, DEMO-38408 confirmed, arrives Sunday, spend
       $32.90; limits/usage counted; App Check `MISSING` on every call (expected, not enforced). Fixed: the Fetched
       screen showed the budget from before the purchase (now refreshes month-to-date on open).
+- [~] Delivery places (Nov 5, deployed addPlace / deletePlace / setDefaultPlace, confirmPlace updated). Onboarding step 2
+      "Where should I deliver?" (5 steps now): PayPal's address as a paper note "from PayPal" → "Yes, deliver here"
+      (confirmPlace, pin drops) or "Use a different address" → address form (label Home / Work / Other, name, street,
+      apt, city, state, ZIP, optional phone; client checks mirror `lib/address.ts`, server field errors shown under each
+      field); no PayPal address → the form. You → Saved places: pinned default, make default, edit, delete (deleting the
+      default asks which place takes over; the only place can't be deleted). Results: "ship to ▾" opens a sheet to pick
+      the place for this purchase (Buy re-arms 0.8 s after the sheet closes); `Screen.Buying` carries the placeId.
+      Rules engine unchanged (suggested places still don't count). Tests: `npm test` (+5 address unit tests, 40 total),
+      `npm run test:places` (emulators, 6 checks: suggestion replaced, field errors, duplicate labels, edit, default
+      switch, delete rules + watches move). **Not yet run on the Android emulator** (PayPal-suggested + manual paths).

@@ -110,9 +110,9 @@ fun BackButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
     }
 }
 
-/** Onboarding header: back, "Step N of 4" chip, 4-segment progress. */
+/** Onboarding header: back, "Step N of 5" chip, 5-segment progress. */
 @Composable
-fun StepHeader(step: Int, total: Int = 4, onBack: (() -> Unit)?) {
+fun StepHeader(step: Int, total: Int = 5, onBack: (() -> Unit)?) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (onBack != null) BackButton(onBack) else Box(Modifier.size(44.dp))

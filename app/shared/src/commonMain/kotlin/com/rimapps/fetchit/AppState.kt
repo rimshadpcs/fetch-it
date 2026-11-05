@@ -29,6 +29,8 @@ sealed interface Screen {
     // Onboarding
     data object Welcome : Screen
     data object LinkPayPal : Screen
+    /** "Where should I deliver?": PayPal's address (confirm or replace) or the address form. */
+    data object OnbDeliver : Screen
     data object OnbRules : Screen
     data object OnbSizes : Screen
     data object Ready : Screen
@@ -38,14 +40,18 @@ sealed interface Screen {
     data object Activity : Screen
     data object Rules : Screen
     data object Account : Screen
+    /** You & settings → Saved places: list, default, delete. */
+    data object Places : Screen
+    /** Add (placeId null) or edit a saved place. */
+    data class PlaceEdit(val placeId: String?) : Screen
     /** Hidden: long-press the dog on Account. Every motion piece on one page, for checking and recording. */
     data object MotionLab : Screen
 
     // Fetch flow
     data object WhichOne : Screen
     data object Results : Screen
-    /** [requestId] is made once per Buy tap; see AppState.buy. */
-    data class Buying(val offer: Offer, val size: String?, val requestId: String) : Screen
+    /** [requestId] is made once per Buy tap; see AppState.buy. [placeId]: where it ships (picked on Results). */
+    data class Buying(val offer: Offer, val size: String?, val requestId: String, val placeId: String) : Screen
     data class Approve(val purchaseId: String) : Screen
     data class Done(val purchaseId: String) : Screen
     data class Order(val purchaseId: String) : Screen
@@ -181,7 +187,12 @@ class AppState(val scope: CoroutineScope, val api: FetchApi = FetchApi()) {
 
     fun refreshActivity() = scope.launch { runCatching { activity = api.activity(); monthToDate = api.monthToDate() } }
 
-    val homePlace: Place? get() = places.firstOrNull { !it.suggested && it.placeId == "home" } ?: places.firstOrNull { !it.suggested }
+    /** Confirmed places (a PayPal suggestion only counts once the user says yes). */
+    val savedPlaces: List<Place> get() = places.filter { !it.suggested }
+    /** Where Buy ships unless the user picks another place: the default, else the first saved one. */
+    val defaultPlace: Place? get() = savedPlaces.firstOrNull { it.isDefault } ?: savedPlaces.firstOrNull()
+
+    fun refreshPlaces() = scope.launch { runCatching { places = api.places() } }
 
     fun budgetLeft(): Double? = rules?.let { it.monthlyBudget - monthToDate }
 

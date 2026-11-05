@@ -12,6 +12,7 @@
     "test:idempotency": "node --test test/idempotency.mjs",
     "test:profile": "node --test test/profile.mjs",
     "test:limits": "node --test test/limits.mjs",
+    "test:places": "node --test test/places.mjs",
     "test": "npm run build && node --test test/*.test.mjs"
   },
   "engines": {

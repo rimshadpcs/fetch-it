@@ -49,6 +49,7 @@ import fetchit.shared.generated.resources.welcome_polo
 import com.rimapps.fetchit.Screen
 import com.rimapps.fetchit.data.HouseRules
 import com.rimapps.fetchit.data.Place
+import com.rimapps.fetchit.data.PlaceForm
 import com.rimapps.fetchit.data.ShopCategory
 import com.rimapps.fetchit.friendly
 import com.rimapps.fetchit.platform.DeepLinks
@@ -136,7 +137,7 @@ private fun WordByWord(lines: List<List<Pair<String, TextStyle>>>, startMs: Int,
     }
 }
 
-/** Step 1: link PayPal (vault, nothing charged), then confirm the Home address PayPal suggests. */
+/** Step 1: link PayPal (vault, nothing charged). PayPal's shipping address, if any, comes back as a suggestion for step 2. */
 @Composable
 fun LinkPayPalScreen(app: AppState) {
     val scope = rememberCoroutineScope()
@@ -145,13 +146,9 @@ fun LinkPayPalScreen(app: AppState) {
     var error by remember { mutableStateOf<String?>(null) }
     var linkedEmail by remember { mutableStateOf(app.user.paypalEmail) }
     var linked by remember { mutableStateOf(app.user.paypalLinked) }
-    var suggested by remember { mutableStateOf<Place?>(null) }
-    var placeConfirmed by remember { mutableStateOf(app.homePlace != null) }
-    // Celebrations only for what happens on this visit: "linked" stamps in and Scout hops; the pin drops on confirm.
+    // Celebrations only for what happens on this visit: "linked" stamps in and Scout hops.
     var justLinked by remember { mutableStateOf(false) }
     var linkDone by remember { mutableStateOf(false) }
-    var pinDropped by remember { mutableStateOf(false) }
-    var placeDone by remember { mutableStateOf(false) }
     var hop by remember { mutableStateOf(false) }
 
     fun complete() {
@@ -163,7 +160,7 @@ fun LinkPayPalScreen(app: AppState) {
                     busy = false
                     linkDone = true; justLinked = true; hop = true
                     delay(DONE_PAUSE_MS + 250)
-                    linked = r.paypalLinked; linkedEmail = r.email; suggested = r.suggestedPlace; linkDone = false
+                    linked = r.paypalLinked; linkedEmail = r.email; linkDone = false
                     app.refresh()
                     delay(900); hop = false
                 }
@@ -200,18 +197,9 @@ fun LinkPayPalScreen(app: AppState) {
                     }
                 }
             }
-            val place = suggested ?: app.places.firstOrNull { it.suggested }
-            if (linked && place != null && !placeConfirmed) {
-                Text("Where should I deliver?", style = hand(28.sp), modifier = Modifier.riseIn())
-                PlaceCard(place, "from your PayPal account", Modifier.noteSlideIn(150))
-            } else if (linked && app.homePlace != null) {
-                Text("Delivering to", style = body(13.sp, FontWeight.SemiBold, Ink.Muted))
-                PlaceCard(app.homePlace!!, null, pinned = true, dropPin = pinDropped)
-            }
             ErrorNote(error)
         }
         Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            val place = suggested ?: app.places.firstOrNull { it.suggested }
             when {
                 !linked && setupTokenId == null -> {
                     PillButton("Connect PayPal", loading = busy, onClick = {
@@ -232,21 +220,83 @@ fun LinkPayPalScreen(app: AppState) {
                     PillButton("I approved it in PayPal", loading = busy, done = linkDone, onClick = { complete() })
                     if (!linkDone) PillButton("Open PayPal again", dark = false, height = 52.dp, onClick = { setupTokenId = null })
                 }
-                place != null && !placeConfirmed -> PillButton("Deliver here", loading = busy, done = placeDone, onClick = {
-                    busy = true
+                else -> PillButton("Next", onClick = { app.go(Screen.OnbDeliver) })
+            }
+        }
+    }
+}
+
+/**
+ * Step 2: where should I deliver? PayPal's address (if it sent one) as a paper note "from PayPal": "Yes, deliver
+ * here" confirms it (the pin drops), "Use a different address" opens the form. No PayPal address: the form.
+ * Coming back with a saved place shows it pinned.
+ */
+@Composable
+fun OnbDeliverScreen(app: AppState) {
+    val scope = rememberCoroutineScope()
+    var loaded by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { runCatching { app.places = app.api.places() }; loaded = true }
+    val suggestion = app.places.firstOrNull { it.suggested }
+    val saved = app.defaultPlace
+    var useForm by remember { mutableStateOf(false) }
+    // The address the user types here is the one they chose: it becomes the default.
+    var form by remember { mutableStateOf(PlaceForm(label = "Home", fullName = suggestion?.fullName ?: "", makeDefault = true)) }
+    var tried by remember { mutableStateOf(false) }
+    var serverErrors by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var busy by remember { mutableStateOf(false) }
+    var done by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var justPinned by remember { mutableStateOf(false) }
+    val showForm = useForm || (loaded && saved == null && suggestion == null)
+
+    Column(Modifier.fillMaxSize().dotted().padding(top = 52.dp, bottom = 34.dp)) {
+        StepHeader(2, onBack = { if (useForm && (suggestion != null || saved != null)) useForm = false else app.back() })
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Gap(10.dp)
+            Text("Where should I deliver?", style = hand(34.sp))
+            when {
+                showForm -> {
+                    Text("I'll only ever ship to places you save.", style = body(16.sp, color = Ink.Muted))
+                    Box(Modifier.noteSlideIn()) { AddressForm(form, { form = it; serverErrors = emptyMap() }, tried, serverErrors) }
+                }
+                saved != null -> {
+                    Text("Got it. You can add more places in settings.", style = body(16.sp, color = Ink.Muted))
+                    PlaceCard(saved, if (saved.phone != null) "call ${saved.phone}" else null, pinned = true, dropPin = justPinned)
+                }
+                suggestion != null -> {
+                    Text("PayPal has this address for you.", style = body(16.sp, color = Ink.Muted))
+                    PlaceCard(suggestion, "from PayPal", Modifier.noteSlideIn(150))
+                }
+                else -> RunningDog(70.dp)
+            }
+            ErrorNote(error)
+        }
+        Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            when {
+                showForm -> PillButton("Save this address", loading = busy, done = done, onClick = {
+                    tried = true; busy = true; error = null
                     scope.launch {
-                        runCatching { app.api.confirmPlace(place.placeId) }
-                            .onSuccess {
-                                busy = false; placeDone = true
-                                delay(DONE_PAUSE_MS)
-                                pinDropped = true; placeConfirmed = true; placeDone = false
-                                app.refresh()
-                            }
-                            .onFailure { error = it.friendly() }
+                        val place = savePlace(app, form) { fields, message -> serverErrors = fields; error = message.takeIf { fields.isEmpty() } }
                         busy = false
+                        if (place != null) { done = true; delay(DONE_PAUSE_MS); done = false; justPinned = true; useForm = false }
                     }
                 })
-                else -> PillButton("Next", onClick = { app.go(Screen.OnbRules) })
+                saved != null -> {
+                    PillButton("Next", onClick = { app.go(Screen.OnbRules) })
+                    PillButton("Use a different address", dark = false, height = 52.dp, onClick = { form = PlaceForm(label = if (saved.label == "Home") "Work" else "Home", fullName = saved.fullName, makeDefault = true); tried = false; useForm = true })
+                }
+                suggestion != null -> {
+                    PillButton("Yes, deliver here", loading = busy, done = done, onClick = {
+                        busy = true; error = null
+                        scope.launch {
+                            runCatching { app.api.confirmPlace(suggestion.placeId); app.places = app.api.places() }
+                                .onSuccess { busy = false; done = true; delay(DONE_PAUSE_MS); done = false; justPinned = true }
+                                .onFailure { error = it.friendly() }
+                            busy = false
+                        }
+                    })
+                    PillButton("Use a different address", dark = false, height = 52.dp, onClick = { useForm = true })
+                }
             }
         }
     }
@@ -359,7 +409,7 @@ fun OnbRulesScreen(app: AppState) {
     var done by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     Column(Modifier.fillMaxSize().dotted().padding(top = 52.dp, bottom = 34.dp)) {
-        StepHeader(2, onBack = { app.back() })
+        StepHeader(3, onBack = { app.back() })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text("Set the house rules", style = hand(34.sp))
             Text("I'll never spend outside these. Anything else, I ask you first.", style = body(16.sp, color = Ink.Muted))
@@ -387,7 +437,7 @@ fun OnbSizesScreen(app: AppState) {
     var shoeScale by remember { mutableStateOf(app.sizes.shoe?.substringBefore(' ')?.takeIf { it in setOf("US", "UK", "EU") } ?: "US") }
     var done by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().dotted().padding(top = 52.dp, bottom = 34.dp)) {
-        StepHeader(3, onBack = { app.back() })
+        StepHeader(4, onBack = { app.back() })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text("What size are you?", style = hand(34.sp))
             Text("So I never fetch the wrong fit.", style = body(16.sp, color = Ink.Muted))
@@ -440,7 +490,7 @@ fun ReadyScreen(app: AppState) {
     LaunchedEffect(name) { if (typed) { typing = true; delay(700); typing = false } }
     val tilt by animateFloatAsState(if (typing) 12f else 0f, uiSpring(stiffness = 300f), label = "tilt")
     Column(Modifier.fillMaxSize().dotted().padding(top = 52.dp, bottom = 34.dp)) {
-        StepHeader(4, onBack = { app.back() })
+        StepHeader(5, onBack = { app.back() })
         Column(Modifier.weight(1f).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text("Meet your fetcher.", style = hand(36.sp))
             BoxWithConstraints(Modifier.fillMaxWidth().height(190.dp), contentAlignment = Alignment.Center) {
@@ -459,7 +509,7 @@ fun ReadyScreen(app: AppState) {
                     if (app.user.paypalLinked) "PayPal linked" else null,
                     app.rules?.let { "${money(it.monthlyBudget)} a month" },
                     app.rules?.let { "auto-buy up to ${money(it.perItemLimit)}" },
-                    app.homePlace?.let { "ships to ${it.label}" },
+                    app.defaultPlace?.let { "ships to ${it.label}" },
                     app.sizes.top?.let { "size $it" },
                 ).forEachIndexed { i, label -> Chip(label, false, onClick = {}, modifier = Modifier.popIn(400 + 60 * i)) }
             }

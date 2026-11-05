@@ -120,6 +120,8 @@ export const confirmPlace = onCall<{ placeId: string }>({ cors: true, enforceApp
   const ref = userDoc(uid).collection("places").doc(placeId);
   const snap = await ref.get();
   if (!snap.exists) throw new HttpsError("not-found", "No such place.");
-  await ref.update({ suggested: false, confirmedAt: FieldValue.serverTimestamp() });
+  // The confirmed place becomes the default unless another saved place already is.
+  const hasDefault = (await userDoc(uid).collection("places").where("isDefault", "==", true).get()).docs.some((p) => p.id !== placeId && !p.data().suggested);
+  await ref.update({ suggested: false, isDefault: !hasDefault, confirmedAt: FieldValue.serverTimestamp() });
   return { placeId, confirmed: true };
 });

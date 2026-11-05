@@ -62,10 +62,9 @@ fun BuyingScreen(app: AppState, screen: Screen.Buying) {
     var purchase by remember { mutableStateOf<Purchase?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(screen.requestId) {
-        val place = app.homePlace ?: run { error = "Add a delivery address first."; return@LaunchedEffect }
         try {
             // Re-entering this screen joins the same call instead of starting another (AppState.buy).
-            val final = app.buy(screen.offer, place.placeId, screen.size, screen.requestId) { decision ->
+            val final = app.buy(screen.offer, screen.placeId, screen.size, screen.requestId) { decision ->
                 if (decision.status == "needs_approval") app.replace(Screen.Approve(decision.purchaseId)) else purchase = decision
             }.await()
             if (final.status != "needs_approval") purchase = final
