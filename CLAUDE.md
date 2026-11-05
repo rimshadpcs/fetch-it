@@ -571,5 +571,6 @@ inactive. No Material icons. Adding one: copy its `<path d>` values from `npm pa
       16 Channel3 roots incl. Health & Beauty; approval sheet "Always allow <category>". `npm test` 41 (category tests
       updated), `npm run test:category` (emulators + live Channel3 + sandbox): perfume → NEEDS_APPROVAL with only
       the category failing → approve + allowCategory → sandbox order `0BU61090EM899792U`, rules gain health-beauty,
-      activity logged. **Not deployed yet** (needs: purchaseOffer, approvePurchase, checkWatches, checkWatchesNow,
-      sweepStuckPurchases, runMaintenance). Not yet seen on a device.
+      activity logged. Deployed Nov 5 (purchaseOffer, approvePurchase, checkWatches, checkWatchesNow,
+      sweepStuckPurchases, runMaintenance). The new Rules chips and approval switch need the new app build; not yet
+      seen on a device.
