@@ -1,5 +1,7 @@
 package com.rimapps.fetchit.ui
 
+import com.rimapps.fetchit.ui.icons.DoodleIcon
+import com.rimapps.fetchit.ui.icons.Doodle
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
@@ -199,7 +201,7 @@ fun PlacesScreen(app: AppState) {
                     PlaceCard(p, if (p.isDefault) "default · Buy ships here" else null, pinned = p.isDefault)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (!p.isDefault) Chip("Make default", false, onClick = { run("default-${p.placeId}") { app.api.setDefaultPlace(p.placeId) } })
-                        Chip("Edit", false, onClick = { app.go(Screen.PlaceEdit(p.placeId)) })
+                        Chip("Edit", false, leading = Doodle.Pencil, onClick = { app.go(Screen.PlaceEdit(p.placeId)) })
                         if (saved.size > 1) Chip(if (deleting == p.placeId && !p.isDefault) "Tap again to delete" else "Delete", deleting == p.placeId, onClick = {
                             when {
                                 deleting != p.placeId -> deleting = p.placeId
@@ -289,7 +291,7 @@ fun BoxScope.PlacePickerSheet(app: AppState, open: Boolean, selectedId: String?,
                         .clickable { onPick(p) }.padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Box(Modifier.size(12.dp).clip(CircleShape).background(if (on) Ink.Ink else Ink.TrackOff))
+                    DoodleIcon(Doodle.MapPin, null, size = 22.dp, color = if (on) Ink.Ink else Ink.LightGrey)
                     Column(Modifier.weight(1f)) {
                         Text(p.label + if (p.isDefault) " · default" else "", style = body(16.sp, FontWeight.SemiBold))
                         Text(p.oneLine, style = body(13.sp, color = Ink.Muted), maxLines = 1)

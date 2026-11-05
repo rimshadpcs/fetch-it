@@ -38,7 +38,9 @@ sealed interface Screen {
     // Main tabs
     data object Fetch : Screen
     data object Activity : Screen
-    data object Rules : Screen
+    /** House rules (opened from You, the budget chip, or a "Change rule" link). [focus]: the setting to show first. */
+    data class Rules(val focus: RuleFocus? = null) : Screen
+    /** The You tab: house rules summary, PayPal, places, sizes, Scout's name, notifications, privacy, help, sign out. */
     data object Account : Screen
     /** You & settings → Saved places: list, default, delete. */
     data object Places : Screen
@@ -55,6 +57,20 @@ sealed interface Screen {
     data class Approve(val purchaseId: String) : Screen
     data class Done(val purchaseId: String) : Screen
     data class Order(val purchaseId: String) : Screen
+}
+
+/** Which part of the Rules screen a "Change rule" link opens at. */
+enum class RuleFocus { Budget, PerItem, Categories, Asks;
+    companion object {
+        /** The setting behind a rules-engine check id (functions/src/rules.ts), if it's on the Rules screen. */
+        fun forRule(rule: String): RuleFocus? = when (rule) {
+            "monthly_budget" -> Budget
+            "per_item_limit" -> PerItem
+            "category" -> Categories
+            "new_store", "size" -> Asks
+            else -> null
+        }
+    }
 }
 
 /** The user's saved sizes (local for now; a setProfile function would sync them). */
@@ -164,6 +180,7 @@ class AppState(val scope: CoroutineScope, val api: FetchApi = FetchApi()) {
             api.profile()?.let(::applyProfile)
             places = api.places()
             monthToDate = api.monthToDate()
+            activity = api.activity()
         }
     }
 
@@ -186,6 +203,9 @@ class AppState(val scope: CoroutineScope, val api: FetchApi = FetchApi()) {
         set(v) = store.set("askedPush", if (v) "1" else null)
 
     fun refreshActivity() = scope.launch { runCatching { activity = api.activity(); monthToDate = api.monthToDate() } }
+
+    /** A purchase is waiting for the user's OK (its latest Activity entry says so): the red dot on Activity. */
+    val needsApproval: Boolean get() = activity.distinctBy { it.purchaseId ?: it.id }.any { it.status == "needs_approval" }
 
     /** Confirmed places (a PayPal suggestion only counts once the user says yes). */
     val savedPlaces: List<Place> get() = places.filter { !it.suggested }

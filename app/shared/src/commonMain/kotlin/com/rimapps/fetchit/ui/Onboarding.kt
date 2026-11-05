@@ -43,6 +43,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rimapps.fetchit.AppState
+import com.rimapps.fetchit.RuleFocus
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import com.rimapps.fetchit.ui.motion.inkStroke
 import fetchit.shared.generated.resources.Res
 import fetchit.shared.generated.resources.welcome_lamp
 import fetchit.shared.generated.resources.welcome_polo
@@ -362,16 +371,16 @@ fun PlaceCard(place: Place, note: String?, modifier: Modifier = Modifier, pinned
 /** Step 2 (and the Rules tab): budget, auto-buy limit, categories, asks. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun RulesEditor(initial: HouseRules, onChange: (HouseRules) -> Unit) {
+fun RulesEditor(initial: HouseRules, focus: RuleFocus? = null, onChange: (HouseRules) -> Unit) {
     var r by remember(initial) { mutableStateOf(initial) }
     fun update(n: HouseRules) { r = n; onChange(n) }
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.rulesSection(focus == RuleFocus.Budget), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Monthly budget", style = body(14.sp, FontWeight.SemiBold, Ink.Muted))
             AmountField(r.monthlyBudget, { update(r.copy(monthlyBudget = it)) }, " a month")
             Segmented(listOf(100.0, 200.0, 500.0), r.monthlyBudget, { money(it) }, { update(r.copy(monthlyBudget = it)) })
         }
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.rulesSection(focus == RuleFocus.PerItem), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Buy without asking, up to", style = body(14.sp, FontWeight.SemiBold, Ink.Muted))
             AmountField(
                 r.perItemLimit, { update(r.copy(perItemLimit = it)) }, " per item",
@@ -382,7 +391,7 @@ fun RulesEditor(initial: HouseRules, onChange: (HouseRules) -> Unit) {
             BudgetBar((r.perItemLimit / r.monthlyBudget).toFloat(), color = if (r.perItemLimit > r.monthlyBudget) Ink.Accent else Ink.Ink)
             Text("Anything over this asks for your fingerprint.", style = hand(18.sp, Ink.Muted))
         }
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.rulesSection(focus == RuleFocus.Categories), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("I can shop for…", style = hand(24.sp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 ShopCategory.entries.forEachIndexed { i, c ->
@@ -393,11 +402,31 @@ fun RulesEditor(initial: HouseRules, onChange: (HouseRules) -> Unit) {
                 }
             }
         }
-        PaperNote(tilt = 0.5f, modifier = Modifier.fillMaxWidth()) {
+        PaperNote(tilt = 0.5f, modifier = Modifier.fillMaxWidth().rulesSection(focus == RuleFocus.Asks)) {
             Toggle("Ask before a new store", r.askBeforeNewStore) { update(r.copy(askBeforeNewStore = it)) }
             Toggle("Ask if I'm unsure about size", r.askIfUnsureAboutSize) { update(r.copy(askIfUnsureAboutSize = it)) }
             Toggle("Only ship to saved places", r.onlyShipToSavedPlaces) { update(r.copy(onlyShipToSavedPlaces = it)) }
         }
+    }
+}
+
+/**
+ * The section a "Change rule" link points at: scrolled into view, then outlined with a dashed pen line that fades
+ * after ~1.5 s (just the fade with reduce motion).
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun Modifier.rulesSection(highlight: Boolean): Modifier {
+    if (!highlight) return this
+    val requester = remember { BringIntoViewRequester() }
+    val glow = remember { androidx.compose.animation.core.Animatable(1f) }
+    LaunchedEffect(Unit) { delay(350); requester.bringIntoView(); delay(900); glow.animateTo(0f, tween(700)) }
+    return this.bringIntoViewRequester(requester).drawBehind {
+        val pad = 8.dp.toPx()
+        drawRoundRect(
+            Ink.Ink.copy(alpha = glow.value), topLeft = Offset(-pad, -pad), size = Size(size.width + 2 * pad, size.height + 2 * pad),
+            cornerRadius = CornerRadius(14.dp.toPx()), style = inkStroke(1.6.dp.toPx(), dashed = true, dash = 6.dp.toPx()),
+        )
     }
 }
 

@@ -186,8 +186,14 @@ Verify exact field names in PayPal's Orders v2 docs / AI Toolkit — don't guess
 Onboarding: Welcome → Link PayPal → Where should I deliver? (PayPal's address "from PayPal": Yes, deliver here / Use a
 different address → form) → Set house rules → Your sizes (optional) → Meet your fetcher (name the dog)
 Main: Fetch (camera / Upload / Voice) → Look what I found → Refine by voice → Fetched (auto-bought, undo) |
-Needs your OK (biometric) → Activity · House rules
-Bottom nav: Fetch · Activity · Rules + round "+" (upload).
+Needs your OK (biometric) → Activity · You
+Bottom nav (`ui/Nav.kt`, drawn once in `App` outside the screen switcher): Activity · **Fetch** (raised 64 dp black
+button, camera doodle, floppy ears; tapping it on Fetch opens the camera) · You. No "+" (Fetch has Upload). The light
+pill slides between Activity and You; Activity has a red dot while a purchase needs your OK (`AppState.needsApproval`).
+You (former Account): house rules summary → Rules, then PayPal, saved places, sizes, fetcher's name (long-press: Motion
+lab), notifications, privacy, help, sign out. Rules is a pushed screen: from You, the budget chip on Fetch, or "Change
+rule" on the blocked outcome / approval sheet / Activity (`changeRuleTarget`: saved_place → Places, else
+`Screen.Rules(RuleFocus)` scrolls to that section and outlines it).
 
 ### Design system — "monochrome scrapbook"
 - Colors: background `#F7F7F6`, ink `#111111`, pill gray `#EDEDEB`, muted text `#6E6E6B`,
@@ -218,6 +224,12 @@ state at once (haptics still play). Hidden **Motion lab** (long-press the dog on
 - Entrances (`Entrance.kt`): `riseIn`, `popIn`, `noteSlideIn`, `wiggleAfterIdle`, `Tape`, `pageTurn`. `uiSpring()` =
   dampingRatio 0.65 (rules: taps 80–150 ms, transitions 250–400 ms, celebrations ≤ 600 ms, springs 0.6–0.7).
   Under reduce motion entrances and screen switches become plain fades (`rememberProgress(fadeOnly = true)`).
+
+### Icons (`shared/.../ui/icons/DoodleIcons.kt`)
+Oreo Doodle Icons, free set (MIT, Nicole Tang; THIRD_PARTY_NOTICES.md). SVG paths copied verbatim into `enum Doodle`
+→ stroke-only `ImageVector` on the 48 grid, round caps/joins, static (no draw-on, no wiggle). `DoodleIcon(icon, cd,
+size, color, strokeWidth)`: ~4 grid units at 24 dp (set default 3.4), 4.6 when active; #111111 active / #6E6E6B
+inactive. No Material icons. Adding one: copy its `<path d>` values from `npm pack @oreo-design/doodle-icons`.
 
 ### Components (`shared/.../ui/components/`)
 - `Modifier.pressScale(source, Press.PILL 0.96 | GRAY 0.95 | ROUND 0.90, tilt)`: 80 ms sink, spring back with
@@ -543,3 +555,8 @@ state at once (haptics still play). Hidden **Motion lab** (long-press the dog on
       Rules engine unchanged (suggested places still don't count). Tests: `npm test` (+5 address unit tests, 40 total),
       `npm run test:places` (emulators, 6 checks: suggestion replaced, field errors, duplicate labels, edit, default
       switch, delete rules + watches move). **Not yet run on the Android emulator** (PayPal-suggested + manual paths).
+- [x] Navigation + doodle icons (Nov 5): Activity · Fetch · You tab bar with the raised ear-topped Fetch button,
+      sliding pill, icon pop, approval dot; "+" and the Fetch header's profile circle removed; You tab; Rules pushed
+      with focus; doodle icons for tabs, search (sniffing), check (prices checked, paid activity), star + arrow (my
+      pick), map-pin (ship to, places), pencil (edit), heart (fetched), bell / gear / lock / help / log-out / ruler / dog /
+      shield-check (You), circle (size pick). Mic has no screen yet (voice isn't built). Builds; not yet seen on a device.

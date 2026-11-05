@@ -1,5 +1,8 @@
 package com.rimapps.fetchit.ui
 
+import androidx.compose.foundation.clickable
+import com.rimapps.fetchit.ui.icons.DoodleIcon
+import com.rimapps.fetchit.ui.icons.Doodle
 import com.rimapps.fetchit.ui.components.PillButton
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -103,7 +106,7 @@ private fun PurchaseView(app: AppState, p: Purchase, onUpdate: (Purchase) -> Uni
         "completed" -> Bought(app, p)
         "blocked" -> Outcome(
             app, p, title = "Not this one.", note = "Blocked by your house rules. Nothing charged.",
-            secondary = "Edit rules" to { app.reset(Screen.Rules) },
+            secondary = "Change rule" to { app.go(changeRuleTarget(p.reasons)) },
         )
         "undone" -> Outcome(app, p, title = "Undone.", note = "Nothing charged.")
         "declined" -> Outcome(app, p, title = "Okay, skipped.", note = "Nothing charged.")
@@ -176,6 +179,7 @@ private fun Bought(app: AppState, p: Purchase) {
         Text("Fetch It", style = body(22.sp, color = Ink.LightGrey), modifier = Modifier.align(Alignment.End).padding(top = 58.dp, end = 26.dp))
         Box(Modifier.fillMaxWidth().height(320.dp)) {
             Polaroid(p.imageUrl, "fetched!", Modifier.width(214.dp).align(Alignment.Center))
+            DoodleIcon(Doodle.Heart, "Fetched", Modifier.align(Alignment.Center).offset(92.dp, (-118).dp).rotate(12f), size = 40.dp, color = Ink.Accent, strokeWidth = 4.4f)
             Mascot(80.dp, Modifier.align(Alignment.BottomEnd).offset((-30).dp, 0.dp))
         }
         Text(
@@ -288,6 +292,10 @@ fun ApproveScreen(app: AppState, screen: Screen.Approve) {
                 }
             }
             ReasonsNote(p, extra = "${app.dogName} found it, but it's outside the rules you set.")
+            Text(
+                "Change rule ›", style = body(14.sp, FontWeight.SemiBold, Ink.Muted),
+                modifier = Modifier.align(Alignment.End).clip(RoundedCornerShape(999.dp)).clickable { app.go(changeRuleTarget(p.reasons)) }.padding(horizontal = 10.dp, vertical = 8.dp),
+            )
             ErrorNote(error)
             PillButton("Approve with fingerprint", loading = busy == "approve", modifier = Modifier.scale(if (busy == null) pulse else 1f), onClick = {
                 approver.approve("Approve ${money(p.price, p.currency)}", p.title) { ok ->

@@ -1,5 +1,7 @@
 package com.rimapps.fetchit.ui
 
+import com.rimapps.fetchit.ui.icons.DoodleIcon
+import com.rimapps.fetchit.ui.icons.Doodle
 import com.rimapps.fetchit.ui.components.PillButton
 import com.rimapps.fetchit.ui.components.Chip
 import com.rimapps.fetchit.ui.components.Segmented
@@ -62,6 +64,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.rimapps.fetchit.FetchSession
+import com.rimapps.fetchit.RuleFocus
+import com.rimapps.fetchit.ui.motion.CountUpMoney
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.runtime.rememberCoroutineScope
@@ -90,31 +94,12 @@ import com.rimapps.fetchit.platform.PhotoSource
 import com.rimapps.fetchit.platform.rememberNotificationPermission
 import com.rimapps.fetchit.platform.rememberPhotoSource
 
+/** A tab screen: dotted paper, with room at the bottom for the floating bar (drawn once in App, see Nav.kt). */
 @Composable
-fun BottomNav(app: AppState, photos: PhotoSource) {
-    val current = app.screen
-    val haptics = rememberHaptics()
-    Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 26.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        listOf(Screen.Fetch to "Fetch", Screen.Activity to "Activity", Screen.Rules to "Rules").forEach { (s, label) ->
-            val on = current == s
-            Box(
-                Modifier.height(64.dp).width(if (on) 98.dp else 86.dp).grayPress({ if (!on) haptics.tick(); app.reset(s) }, Role.Tab, RoundedCornerShape(32.dp)).background(if (on) Ink.Ink else Ink.Pill),
-                contentAlignment = Alignment.Center,
-            ) { Text(label, style = body(13.sp, if (on) FontWeight.SemiBold else FontWeight.Medium, if (on) Ink.White else Ink.NavGrey)) }
-        }
-        Spacer()
-        Box(
-            Modifier.size(64.dp).shadow(6.dp, CircleShape).roundButton({ photos.pickPhoto() }).background(Ink.White),
-            contentAlignment = Alignment.Center,
-        ) { Text("+", style = body(30.sp, FontWeight.Medium)) }
-    }
-}
-
-@Composable
-fun MainScaffold(app: AppState, photos: PhotoSource = rememberPhotoSource { app.startFetch(it) }, content: @Composable () -> Unit) {
+fun MainScaffold(content: @Composable () -> Unit) {
     Column(Modifier.fillMaxSize().dotted()) {
         Box(Modifier.weight(1f)) { content() }
-        BottomNav(app, photos)
+        Gap(NAV_SPACE)
     }
 }
 
@@ -126,18 +111,18 @@ fun FetchScreen(app: AppState) {
     val askNotifications = rememberNotificationPermission()
     LaunchedEffect(Unit) { if (!app.askedPush) { app.askedPush = true; askNotifications() } }
     val session = app.session
-    MainScaffold(app, photos) {
+    MainScaffold {
         Column(Modifier.fillMaxSize()) {
-            Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 22.dp, top = 58.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("What should I fetch?", style = hand(32.sp), modifier = Modifier.weight(1f))
-                Box(Modifier.size(44.dp).roundButton({ app.go(Screen.Account) }).background(Ink.Ink), contentAlignment = Alignment.Center) {
-                    Text(app.dogName.take(1).uppercase(), style = body(15.sp, FontWeight.SemiBold, Ink.White))
-                }
-            }
+            Text("What should I fetch?", style = hand(32.sp), modifier = Modifier.padding(start = 24.dp, end = 22.dp, top = 58.dp))
+            // Budget chip: a shortcut to the house rules.
             app.budgetLeft()?.let { left ->
-                Row(Modifier.padding(start = 24.dp, top = 4.dp), verticalAlignment = Alignment.Bottom) {
-                    Text(money(left), style = serif(20.sp, Ink.Muted))
-                    Text(" left this month", style = body(18.sp, FontWeight.SemiBold, Ink.Muted))
+                Row(
+                    Modifier.padding(start = 20.dp, top = 6.dp).height(40.dp).grayPress({ app.go(Screen.Rules(RuleFocus.Budget)) }).background(Ink.Pill).padding(horizontal = 14.dp)
+                        .semantics(mergeDescendants = true) {},
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    CountUpMoney(left, serif(19.sp, Ink.Ink), from = null)
+                    Text(" left this month  ›", style = body(15.sp, FontWeight.SemiBold, Ink.Muted))
                 }
             }
             Segmented(listOf("Snap", "Upload"), mode, { it }, { mode = it }, Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 12.dp))
@@ -214,6 +199,7 @@ private fun SniffingView(app: AppState, modifier: Modifier) {
                         .background(Ink.White).padding(horizontal = 14.dp, vertical = 9.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+                    DoodleIcon(Doodle.Search, null, size = 16.dp)
                     Text(if (s.identified.isEmpty()) "Sniffing around…" else "Checking stores…", style = body(13.sp, FontWeight.SemiBold))
                 }
             }
@@ -349,7 +335,10 @@ fun ResultsScreen(app: AppState) {
                 Text(r.offers.size.toString(), style = serif(18.sp, Ink.Muted))
                 Text("matches · ${r.offers.map { it.merchant }.distinct().size} stores", style = body(16.sp, FontWeight.SemiBold, Ink.Muted))
                 Box(Modifier.shadow(3.dp, RoundedCornerShape(999.dp)).clip(RoundedCornerShape(999.dp)).background(Ink.White).padding(horizontal = 10.dp, vertical = 5.dp)) {
-                    Text("✓ prices checked", style = body(12.sp, FontWeight.SemiBold))
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        DoodleIcon(Doodle.Check, null, size = 14.dp, strokeWidth = 5f)
+                        Text("prices checked", style = body(12.sp, FontWeight.SemiBold))
+                    }
                 }
             }
             Row(Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -401,7 +390,10 @@ fun ResultsScreen(app: AppState) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.widthIn(max = 120.dp).clip(RoundedCornerShape(999.dp)).clickable(role = Role.Button) { picking = true }.padding(start = 16.dp, end = 10.dp, top = 6.dp, bottom = 6.dp)) {
-                    Text("ship to ▾", style = body(11.sp, FontWeight.SemiBold, Ink.Grey))
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                        DoodleIcon(Doodle.MapPin, null, size = 13.dp, color = Ink.Grey, strokeWidth = 4.6f)
+                        Text("ship to ▾", style = body(11.sp, FontWeight.SemiBold, Ink.Grey))
+                    }
                     Text(place?.label ?: "add address", style = body(16.sp, FontWeight.SemiBold), maxLines = 1)
                 }
                 Box(
@@ -470,7 +462,12 @@ private fun OfferCard(o: Offer, selected: Boolean, height: androidx.compose.ui.u
                 Text(money(o.price, o.currency), style = serif(17.sp))
             }
             Text(o.title, style = body(12.sp, color = Ink.Grey), maxLines = 2)
-            if (caption != null) Text(caption, style = hand(19.sp, if (warn) Ink.Warning else Ink.Ink))
+            // Scout's pick gets a star and a doodle arrow pointing back up at the photo.
+            if (caption != null && caption.startsWith("my pick")) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                DoodleIcon(Doodle.Star, null, size = 18.dp)
+                Text(caption, style = hand(19.sp), modifier = Modifier.weight(1f, fill = false))
+                DoodleIcon(Doodle.ArrowUpRight, null, size = 18.dp, color = Ink.Muted)
+            } else if (caption != null) Text(caption, style = hand(19.sp, if (warn) Ink.Warning else Ink.Ink))
         }
     }
 }

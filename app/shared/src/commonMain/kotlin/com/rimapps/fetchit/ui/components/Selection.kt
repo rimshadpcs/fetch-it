@@ -1,5 +1,11 @@
 package com.rimapps.fetchit.ui.components
 
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.foundation.Image
+import com.rimapps.fetchit.ui.icons.DoodleIcon
+import com.rimapps.fetchit.ui.icons.Doodle
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
@@ -91,7 +97,7 @@ fun <T> Segmented(options: List<T>, selected: T, label: (T) -> String, onSelect:
  * fades back to gray. [check]: multi-select chips also draw a ✓ in front when selected.
  */
 @Composable
-fun Chip(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, check: Boolean = false) {
+fun Chip(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, check: Boolean = false, leading: Doodle? = null) {
     val reduce = LocalReduceMotion.current
     val bg by animateColorAsState(if (selected) Ink.Ink else Ink.Pill, tween(180), label = "chipBg")
     val fg by animateColorAsState(if (selected) Ink.White else Ink.NavGrey, tween(180), label = "chipFg")
@@ -112,6 +118,7 @@ fun Chip(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifie
         if (check) AnimatedVisibility(selected, enter = expandHorizontally(tween(160)) + fadeIn(tween(160)), exit = shrinkHorizontally(tween(140)) + fadeOut(tween(100))) {
             CheckMark(Ink.White, Modifier.padding(end = 6.dp).size(14.dp), durationMs = 220, delayMs = 60, strokeWidth = 2.dp)
         }
+        if (leading != null) DoodleIcon(leading, null, Modifier.padding(end = 6.dp), size = 16.dp, color = fg, strokeWidth = 4.6f)
         Text(text, style = body(14.sp, FontWeight.SemiBold, fg))
     }
 }
@@ -170,9 +177,12 @@ fun SizePicker(options: List<String>, selected: String?, onPick: (String) -> Uni
                     .grayPress({ if (!on) { haptics.tick(); onPick(o) } }, Role.RadioButton, RoundedCornerShape(23.dp)),
                 contentAlignment = Alignment.Center,
             ) {
-                if (on) PathDraw(Modifier.matchParentSize(), strokeWidth = 2.2.dp, durationMs = 300, key = o) { s ->
-                    listOf(wobblyLoop(Rect(Offset(s.width * 0.08f, s.height * 0.1f), Size(s.width * 0.84f, s.height * 0.8f)), seed = i + 3))
-                }
+                // The doodle circle (static icon) around the pick, faded in.
+                val ring by animateFloatAsState(if (on) 1f else 0f, tween(200), label = "ring")
+                if (ring > 0f) Image(
+                    rememberVectorPainter(Doodle.Circle.vector(3.6f)), null, Modifier.matchParentSize().graphicsLayer { alpha = ring },
+                    contentScale = ContentScale.FillBounds, colorFilter = ColorFilter.tint(Ink.Ink),
+                )
                 FlipText(display(o), flipKey, i * 30, body(16.sp, if (on) FontWeight.Bold else FontWeight.Medium, if (on) Ink.Ink else Ink.NavGrey))
             }
         }

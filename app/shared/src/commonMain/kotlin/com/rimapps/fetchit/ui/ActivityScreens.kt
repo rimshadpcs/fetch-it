@@ -1,5 +1,19 @@
 package com.rimapps.fetchit.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.layout.heightIn
+import com.rimapps.fetchit.RuleFocus
+import com.rimapps.fetchit.data.Reason
+import com.rimapps.fetchit.platform.rememberNotificationPermission
+import com.rimapps.fetchit.ui.components.grayPress
+import com.rimapps.fetchit.ui.icons.Doodle
+import com.rimapps.fetchit.ui.icons.DoodleIcon
+import com.rimapps.fetchit.ui.motion.CountUpMoney
 import com.rimapps.fetchit.ui.components.PillButton
 import com.rimapps.fetchit.ui.components.Chip
 import androidx.compose.foundation.background
@@ -77,7 +91,7 @@ fun ActivityScreen(app: AppState) {
         while (true) { app.refreshActivity(); delay(10_000) }
     }
     val cards = app.activity.distinctBy { it.purchaseId ?: it.id }.filter { filter == "All" || group(it) == filter }
-    MainScaffold(app) {
+    MainScaffold {
         Column(Modifier.fillMaxSize()) {
             Text("What I've been up to", style = hand(32.sp), modifier = Modifier.padding(start = 24.dp, top = 58.dp))
             Text(today(), style = serif(20.sp, Ink.Muted), modifier = Modifier.padding(start = 24.dp, top = 2.dp))
@@ -107,6 +121,7 @@ private fun ActivityCard(app: AppState, e: ActivityEntry, tilt: Float) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (e.status == "needs_approval" || e.status == "blocked") Box(Modifier.padding(end = 6.dp).size(8.dp).clip(CircleShape).background(Ink.Accent))
+                    if (e.status in setOf("completed", "approved", "confirmed", "shipped", "delivered")) DoodleIcon(Doodle.Check, null, Modifier.padding(end = 4.dp), size = 16.dp, color = Ink.Muted, strokeWidth = 4.6f)
                     Text(heading, style = body(14.sp, FontWeight.SemiBold, Ink.Muted), modifier = Modifier.weight(1f))
                     Text(timeAgo(e.createdAt), style = serif(15.sp, Ink.Muted))
                 }
@@ -118,7 +133,7 @@ private fun ActivityCard(app: AppState, e: ActivityEntry, tilt: Float) {
         }
         when {
             e.status == "needs_approval" -> PillButton("Review", height = 44.dp, onClick = { app.go(Screen.Approve(e.purchaseId!!)) })
-            e.status == "blocked" -> PillButton("Edit rules", dark = false, height = 44.dp, onClick = { app.reset(Screen.Rules) })
+            e.status == "blocked" -> PillButton("Change rule", dark = false, height = 44.dp, onClick = { app.go(changeRuleTarget(e.reasons)) })
             // Paid: the order (and, until it ships, Cancel order).
             e.purchaseId != null && (e.type == "order" || e.status == "completed") -> PillButton(
                 if (e.status in setOf("completed", "placed", "confirmed")) "Order · cancel" else "Order details",
@@ -154,8 +169,9 @@ internal fun timeAgo(millis: Long): String {
     }
 }
 
+/** House rules, pushed from You / the budget chip / a "Change rule" link ([Screen.Rules.focus] scrolls there). */
 @Composable
-fun RulesScreen(app: AppState) {
+fun RulesScreen(app: AppState, screen: Screen.Rules) {
     val scope = rememberCoroutineScope()
     val saved = app.rules ?: HouseRules()
     var draft by remember(app.rules) { mutableStateOf(saved) }
@@ -163,73 +179,147 @@ fun RulesScreen(app: AppState) {
     var done by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) { app.refresh() }
-    MainScaffold(app) {
-        Column(Modifier.fillMaxSize()) {
-            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(start = 24.dp, end = 24.dp, top = 58.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("House rules", style = hand(34.sp))
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text(app.dogName, style = body(16.sp, FontWeight.SemiBold, Ink.Muted))
-                    Text(" only ", style = serif(18.sp, Ink.Muted))
-                    Text("spends inside these", style = body(16.sp, FontWeight.SemiBold, Ink.Muted))
-                }
-                PaperNote(Modifier.fillMaxWidth()) {
-                    Row { Text("This month", style = body(13.sp, FontWeight.SemiBold, Ink.Muted), modifier = Modifier.weight(1f)); Text("${money(saved.monthlyBudget - app.monthToDate)} left", style = hand(20.sp)) }
-                    BudgetBar(((saved.monthlyBudget - app.monthToDate) / saved.monthlyBudget).toFloat())
-                    Text("${money(app.monthToDate)} spent or reserved", style = body(13.sp, color = Ink.Muted))
-                }
-                RulesEditor(saved) { draft = it }
-                ErrorNote(error)
+    Column(Modifier.fillMaxSize().dotted().padding(top = 56.dp, bottom = 34.dp)) {
+        Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            BackButton({ app.back() })
+            Text("House rules", style = hand(30.sp))
+        }
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(start = 24.dp, end = 24.dp, top = 12.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(app.dogName, style = body(16.sp, FontWeight.SemiBold, Ink.Muted))
+                Text(" only ", style = serif(18.sp, Ink.Muted))
+                Text("spends inside these", style = body(16.sp, FontWeight.SemiBold, Ink.Muted))
             }
-            if (draft != saved || done) PillButton("Save rules", loading = busy, done = done, enabled = draft.allowedCategories.isNotEmpty(), modifier = Modifier.padding(horizontal = 20.dp), onClick = {
-                busy = true; error = null
-                scope.launch {
-                    runCatching { app.api.setRules(draft) }
-                        .onSuccess { busy = false; done = true; delay(600); app.rules = it; done = false }
-                        .onFailure { error = it.friendly() }
-                    busy = false
+            BudgetNote(app, saved)
+            RulesEditor(saved, focus = screen.focus) { draft = it }
+            ErrorNote(error)
+        }
+        if (draft != saved || done) PillButton("Save rules", loading = busy, done = done, enabled = draft.allowedCategories.isNotEmpty(), modifier = Modifier.padding(horizontal = 20.dp), onClick = {
+            busy = true; error = null
+            scope.launch {
+                runCatching { app.api.setRules(draft) }
+                    .onSuccess { busy = false; done = true; delay(600); app.rules = it; done = false }
+                    .onFailure { error = it.friendly() }
+                busy = false
+            }
+        })
+    }
+}
+
+/** This month: what's left (counting), the bar, what's spent or reserved. */
+@Composable
+fun BudgetNote(app: AppState, rules: HouseRules, modifier: Modifier = Modifier) {
+    PaperNote(modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("This month", style = body(13.sp, FontWeight.SemiBold, Ink.Muted), modifier = Modifier.weight(1f))
+            CountUpMoney(rules.monthlyBudget - app.monthToDate, hand(20.sp), from = null, suffix = " left")
+        }
+        BudgetBar(((rules.monthlyBudget - app.monthToDate) / rules.monthlyBudget).toFloat())
+        Text("${money(app.monthToDate)} spent or reserved", style = body(13.sp, color = Ink.Muted))
+    }
+}
+
+/**
+ * The You tab: house rules first (summary card → Rules), then PayPal, saved places, sizes, the fetcher's name,
+ * notifications, privacy, help and sign out. Long-press the name row for the hidden Motion lab.
+ */
+@Composable
+fun AccountScreen(app: AppState) {
+    var confirmReset by remember { mutableStateOf(false) }
+    var open by remember { mutableStateOf<String?>(null) }
+    val askNotifications = rememberNotificationPermission()
+    LaunchedEffect(Unit) { app.refresh() }
+    MainScaffold {
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 22.dp, end = 22.dp, top = 58.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            Text("You & ${app.dogName}", style = hand(32.sp))
+            // House rules first: what the fetcher may spend, one tap from changing it.
+            app.rules?.let { r ->
+                PaperNote(Modifier.fillMaxWidth().grayPress({ app.go(Screen.Rules()) }, shape = RoundedCornerShape(4.dp)), tilt = -0.6f) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("House rules", style = hand(26.sp), modifier = Modifier.weight(1f))
+                        DoodleIcon(Doodle.Pencil, null, size = 20.dp, color = Ink.Muted)
+                        Text(" edit", style = body(14.sp, FontWeight.SemiBold, Ink.Muted))
+                    }
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        CountUpMoney(r.monthlyBudget - app.monthToDate, body(28.sp, FontWeight.Medium), from = null)
+                        Text(" left of ${money(r.monthlyBudget)}", style = serif(17.sp, Ink.Grey))
+                    }
+                    BudgetBar(((r.monthlyBudget - app.monthToDate) / r.monthlyBudget).toFloat())
+                    Text(
+                        listOfNotNull(
+                            "auto-buy up to ${money(r.perItemLimit)}",
+                            "${r.allowedCategories.size} categories",
+                            if (r.askBeforeNewStore) "asks before new stores" else null,
+                        ).joinToString(" · "),
+                        style = body(13.sp, color = Ink.Muted),
+                    )
                 }
-            })
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                DoodleIcon(Doodle.Gear, null, size = 20.dp, color = Ink.Muted)
+                Text("settings", style = hand(22.sp, Ink.Muted))
+            }
+            PaperNote(Modifier.fillMaxWidth(), tilt = 0f) {
+                SettingRow(Doodle.ShieldCheck, "PayPal", if (app.user.paypalLinked) "linked · ${app.user.paypalEmail ?: "sandbox"}" else "not linked") {
+                    if (!app.user.paypalLinked) app.go(Screen.LinkPayPal)
+                }
+                SettingRow(Doodle.MapPin, "Saved places", app.savedPlaces.joinToString(" · ") { it.label + if (it.isDefault) " (default)" else "" }.ifBlank { "none yet" }) { app.go(Screen.Places) }
+                SettingRow(Doodle.Ruler, "My sizes", listOfNotNull(app.sizes.top, app.sizes.waist?.let { "waist $it" }, app.sizes.shoe, app.sizes.fit?.lowercase()?.let { "$it fit" }).joinToString(" · ").ifBlank { "not set" }) { app.go(Screen.OnbSizes) }
+                SettingRow(Doodle.Dog, "${app.dogName}'s name", "rename your fetcher", onLongClick = { app.go(Screen.MotionLab) }) { app.go(Screen.Ready) }
+                SettingRow(Doodle.Bell, "Notifications", "\"Needs your OK\" and price drops · tap to allow") { askNotifications() }
+                SettingRow(Doodle.Lock, "Privacy", "what I keep, and what I don't") { open = if (open == "privacy") null else "privacy" }
+                Expand(open == "privacy") {
+                    Text(
+                        "Your photo is only held in memory while I search; a crop of the item goes to the product search. " +
+                            "I never see your PayPal password: PayPal gives me a token to pay with, kept on the server where the app can't read it. " +
+                            "Your rules, places, sizes and activity are stored under your account only.",
+                        style = body(13.sp, color = Ink.Muted),
+                    )
+                }
+                SettingRow(Doodle.Help, "Help", "how fetching works") { open = if (open == "help") null else "help" }
+                Expand(open == "help") {
+                    Text(
+                        "Snap or upload something you want. I find where to buy it and check your house rules: inside them I buy " +
+                            "(with 5 seconds to undo); outside them I ask for your fingerprint; against a hard rule I don't buy. " +
+                            "This is a sandbox build: PayPal sandbox money, a demo store, no real orders.",
+                        style = body(13.sp, color = Ink.Muted),
+                    )
+                }
+                SettingRow(Doodle.LogOut, if (confirmReset) "Tap again to sign out" else "Sign out", "start over on this phone") {
+                    if (confirmReset) app.signOut() else confirmReset = true
+                }
+            }
+            Text("Fetch It · sandbox build 0.1 · PayPal sandbox, demo store", style = body(12.sp, color = Ink.Grey), modifier = Modifier.align(Alignment.CenterHorizontally))
         }
     }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun AccountScreen(app: AppState) {
-    var confirmReset by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxSize().dotted().verticalScroll(rememberScrollState()).padding(top = 56.dp, bottom = 34.dp)) {
-        Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            BackButton({ app.back() })
-            Text("You & ${app.dogName}", style = hand(30.sp))
+private fun SettingRow(icon: Doodle, title: String, sub: String, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 52.dp).clip(RoundedCornerShape(12.dp))
+            .combinedClickable(onLongClick = onLongClick, onClick = onClick).padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        DoodleIcon(icon, null, size = 26.dp)
+        Column(Modifier.weight(1f)) {
+            Text(title, style = body(16.sp, FontWeight.SemiBold))
+            Text(sub, style = body(13.sp, color = Ink.Muted), maxLines = 2)
         }
-        Column(Modifier.padding(22.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-            Row(Modifier.combinedClickable(onLongClick = { app.go(Screen.MotionLab) }) { app.go(Screen.Ready) }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Mascot(80.dp)
-                Column {
-                    Text(app.dogName, style = hand(30.sp))
-                    Text("rename", style = serif(16.sp, Ink.Muted))
-                    Text(app.user.paypalEmail ?: "PayPal not linked", style = body(14.sp, color = Ink.Muted))
-                }
-            }
-            Text("money & delivery", style = hand(22.sp, Ink.Muted))
-            PaperNote(Modifier.fillMaxWidth(), tilt = 0f) {
-                Row2("PayPal", if (app.user.paypalLinked) "linked · sandbox" else "not linked") { if (!app.user.paypalLinked) app.go(Screen.LinkPayPal) }
-                Row2("Saved places", app.savedPlaces.joinToString(" · ") { it.label + if (it.isDefault) " (default)" else "" }.ifBlank { "none yet" }) { app.go(Screen.Places) }
-                Row2("My sizes", listOfNotNull(app.sizes.top, app.sizes.waist?.let { "waist $it" }, app.sizes.shoe, app.sizes.fit?.lowercase()?.let { "$it fit" }).joinToString(" · ").ifBlank { "not set" }) { app.go(Screen.OnbSizes) }
-                Row2("House rules", app.rules?.let { "${money(it.monthlyBudget)} a month · auto-buy up to ${money(it.perItemLimit)}" } ?: "not set") { app.reset(Screen.Rules) }
-            }
-            PillButton(if (confirmReset) "Tap again to start over" else "Start over", dark = false, height = 52.dp, onClick = {
-                if (confirmReset) app.signOut() else confirmReset = true
-            })
-            Text("Fetch It · sandbox build 0.1 · PayPal sandbox, demo store", style = body(12.sp, color = Ink.Grey), modifier = Modifier.align(Alignment.CenterHorizontally))
-        }
+        Text("›", style = body(20.sp, color = Ink.LightGrey))
     }
 }
 
 @Composable
-private fun Row2(title: String, sub: String, onClick: () -> Unit) {
-    Column(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 6.dp)) {
-        Text(title, style = body(16.sp, FontWeight.SemiBold))
-        Text(sub, style = body(13.sp, color = Ink.Muted))
+private fun Expand(visible: Boolean, content: @Composable () -> Unit) {
+    AnimatedVisibility(visible, enter = expandVertically(tween(250)) + fadeIn(tween(250)), exit = shrinkVertically(tween(200)) + fadeOut(tween(150))) {
+        Box(Modifier.padding(start = 40.dp, bottom = 6.dp)) { content() }
     }
+}
+
+/** Where a "Change rule" link goes: the place list for a ship-to problem, else the matching rules section. */
+fun changeRuleTarget(reasons: List<Reason>): Screen {
+    val failing = reasons.filter { !it.pass }.map { it.rule }
+    return if ("saved_place" in failing) Screen.Places else Screen.Rules(failing.firstNotNullOfOrNull { RuleFocus.forRule(it) })
 }

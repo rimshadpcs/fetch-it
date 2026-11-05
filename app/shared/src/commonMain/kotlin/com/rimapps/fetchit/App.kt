@@ -1,6 +1,12 @@
 package com.rimapps.fetchit
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.ui.Alignment
+import com.rimapps.fetchit.platform.rememberPhotoSource
+import com.rimapps.fetchit.ui.BottomNav
+import com.rimapps.fetchit.ui.TABS
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.slideInHorizontally
@@ -75,9 +81,10 @@ fun App(register: ((() -> Boolean) -> Unit)? = null) {
         PushOpens.pending.collect { open -> if (open != null) { PushOpens.pending.value = null; app.openFromPush(open) } }
     }
     val reduceMotion = systemReduceMotion()
+    val photos = rememberPhotoSource { app.startFetch(it) }
     val shake = remember { ScreenShake() }
     FetchTheme {
-        CompositionLocalProvider(LocalReduceMotion provides reduceMotion, LocalScreenShake provides shake) {
+        CompositionLocalProvider(LocalReduceMotion provides reduceMotion, LocalScreenShake provides shake) { Box(Modifier.fillMaxSize()) {
             SharedTransitionLayout(Modifier.fillMaxSize().shakeable(shake)) {
                 CompositionLocalProvider(LocalSharedScope provides this) {
                     AnimatedContent(app.screen, transitionSpec = { screenTransition(initialState, targetState, reduceMotion) }, label = "screen") { screen ->
@@ -96,7 +103,7 @@ fun App(register: ((() -> Boolean) -> Unit)? = null) {
                                     Screen.Ready -> ReadyScreen(app)
                                     Screen.Fetch -> FetchScreen(app)
                                     Screen.Activity -> ActivityScreen(app)
-                                    Screen.Rules -> RulesScreen(app)
+                                    is Screen.Rules -> RulesScreen(app, screen)
                                     Screen.Account -> AccountScreen(app)
                                     Screen.Places -> PlacesScreen(app)
                                     is Screen.PlaceEdit -> PlaceEditScreen(app, screen)
@@ -113,9 +120,14 @@ fun App(register: ((() -> Boolean) -> Unit)? = null) {
                     }
                 }
             }
+            // The tab bar lives outside the screen switcher so its pill can slide between tabs.
+            AnimatedVisibility(
+                app.screen in TABS, modifier = Modifier.align(Alignment.BottomCenter),
+                enter = fadeIn(tween(200)) + slideInVertically(tween(300)) { it / 2 }, exit = fadeOut(tween(150)) + slideOutVertically(tween(200)) { it / 2 },
+            ) { BottomNav(app, photos) }
             // Edge-to-edge: keep scrolled content from showing through the status bar.
             Box(Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars).background(Ink.Background.copy(alpha = 0.94f)))
-        }
+        } }
     }
 }
 
