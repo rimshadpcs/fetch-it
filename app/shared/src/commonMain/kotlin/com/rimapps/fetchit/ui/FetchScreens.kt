@@ -57,7 +57,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.rimapps.fetchit.FetchSession
+import com.rimapps.fetchit.ui.motion.Dog
+import com.rimapps.fetchit.ui.motion.DogMood
+import com.rimapps.fetchit.ui.motion.HandwritingReveal
+import com.rimapps.fetchit.ui.motion.PathDraw
+import com.rimapps.fetchit.ui.motion.PawTrail
 import com.rimapps.fetchit.ui.motion.RunningDog
+import com.rimapps.fetchit.ui.motion.outlineBox
+import com.rimapps.fetchit.ui.motion.rememberProgress
+import com.rimapps.fetchit.ui.motion.sharedPhoto
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.graphicsLayer
 import kotlinx.coroutines.delay
 import com.rimapps.fetchit.AppState
 import com.rimapps.fetchit.Screen
@@ -120,7 +131,8 @@ fun FetchScreen(app: AppState) {
             Box(Modifier.fillMaxWidth().height(1.dp).background(Ink.Divider))
 
             val ready = session?.response?.takeIf { !session.loading && session.error == null && it.status in setOf("results", "choose") }
-            if (session != null && (session.loading || session.error != null)) {
+            // While Results / Which one? take over, keep showing the photo: it's the shared element they fly in from.
+            if (session != null && (session.loading || session.error != null || app.screen != Screen.Fetch)) {
                 SniffingView(app, Modifier.weight(1f))
             } else if (ready != null) {
                 // Results came back while the user was on another tab: they open them, nothing pops up on its own.
@@ -176,15 +188,13 @@ private fun Modifier.dashedBorder() = drawBehind {
     )
 }
 
-/** The photo, "Sniffing around…", and "I think it's a…" as soon as identify answers. */
+/** The photo prints as a polaroid; Scout sniffs along a paw-print trail; "I think it's a…" writes on once identify answers. */
 @Composable
 private fun SniffingView(app: AppState, modifier: Modifier) {
     val s = app.session ?: return
-    Column(modifier.padding(horizontal = 22.dp, vertical = 22.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(modifier.padding(start = 22.dp, end = 22.dp, top = 24.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Box(Modifier.fillMaxWidth().weight(1f)) {
-            BoxWithConstraints(Modifier.fillMaxSize().rotate(-1f).background(Color(0xFF3E3C38))) {
-                AsyncImage(s.photo, contentDescription = "Your photo", contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
-            }
+            PrintedPolaroid(s, Modifier.fillMaxSize())
             if (s.loading) {
                 Row(
                     Modifier.align(Alignment.TopEnd).offset((-8).dp, (-14).dp).shadow(4.dp, RoundedCornerShape(999.dp)).clip(RoundedCornerShape(999.dp))
@@ -194,21 +204,52 @@ private fun SniffingView(app: AppState, modifier: Modifier) {
                     Text(if (s.identified.isEmpty()) "Sniffing around…" else "Checking stores…", style = body(13.sp, FontWeight.SemiBold))
                 }
             }
-            s.identified.firstOrNull()?.let { item ->
-                Column(
-                    Modifier.align(Alignment.BottomEnd).offset((-8).dp, 18.dp).rotate(1.5f).shadow(4.dp).background(Ink.White)
-                        .border(1.dp, Color(0xFFE6E6E3)).padding(horizontal = 14.dp, vertical = 10.dp),
-                ) {
-                    Text("I think it's a…", style = body(12.sp, FontWeight.SemiBold, Ink.Grey))
-                    Text(listOfNotNull(item.item_type, item.colors.firstOrNull()).joinToString(", "), style = hand(22.sp))
-                }
-            }
         }
-        if (s.loading) RunningDog(90.dp, Modifier.align(Alignment.CenterHorizontally)) else Gap(10.dp)
+        if (s.loading) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+            PawTrail(Modifier.weight(1f).height(40.dp).padding(bottom = 4.dp))
+            Dog(62.dp, DogMood.Sniffing)
+        }
         if (s.error != null) {
             ErrorNote(s.error)
             PillButton("Try another photo", onClick = { app.session = null })
         }
+    }
+}
+
+/** The user's photo, shared between Fetch, Which one? and the Results header. */
+internal const val PHOTO_KEY = "fetch-photo"
+
+/** Slides out like a fresh print and develops (dark → photo), then a strip of tape lands on top. ≈ 640 ms in all. */
+@Composable
+private fun PrintedPolaroid(s: FetchSession, modifier: Modifier) {
+    val print = rememberProgress(s, 520)
+    val tape = rememberProgress(s, 240, delayMs = 400)
+    Box(modifier.graphicsLayer {
+        translationY = (1f - print.value) * -56.dp.toPx()
+        alpha = (print.value * 2.5f).coerceAtMost(1f)
+        rotationZ = -1.5f
+    }) {
+        Column(Modifier.fillMaxSize().shadow(5.dp).background(Ink.White).padding(start = 12.dp, end = 12.dp, top = 14.dp, bottom = 8.dp)) {
+            Box(Modifier.fillMaxWidth().weight(1f).sharedPhoto(PHOTO_KEY).background(Color(0xFF3E3C38))) {
+                AsyncImage(s.photo, contentDescription = "Your photo", contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+                Box(Modifier.matchParentSize().graphicsLayer { alpha = 1f - print.value }.background(Color(0xFF3E3C38)))
+            }
+            Column(Modifier.fillMaxWidth().height(56.dp).padding(start = 4.dp, top = 6.dp)) {
+                val item = s.identified.firstOrNull()
+                if (item == null) Text("sniffing…", style = hand(24.sp, Ink.LightGrey))
+                else {
+                    Text("I think it's a…", style = body(12.sp, FontWeight.SemiBold, Ink.Grey))
+                    HandwritingReveal(listOfNotNull(item.item_type, item.colors.firstOrNull()).joinToString(", "), hand(24.sp))
+                }
+            }
+        }
+        Box(
+            Modifier.align(Alignment.TopStart).size(92.dp, 24.dp).graphicsLayer {
+                translationX = -22.dp.toPx(); translationY = 4.dp.toPx(); rotationZ = -38f
+                val v = tape.value
+                alpha = v; scaleX = 1.35f - 0.35f * v; scaleY = 1.35f - 0.35f * v
+            }.background(Color(0xFFEDE6D3).copy(alpha = 0.88f)),
+        )
     }
 }
 
@@ -225,12 +266,13 @@ fun WhichOneScreen(app: AppState) {
         Text("I spotted a few things. Tap the one you want.", style = body(16.sp, color = Ink.Muted), modifier = Modifier.padding(start = 70.dp, top = 4.dp, end = 20.dp))
         BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).padding(20.dp), contentAlignment = Alignment.Center) {
             // Photo with the item boxes drawn on top; tapping a box picks it.
-            Box(Modifier.fillMaxSize().background(Color(0xFF3E3C38))) {
+            Box(Modifier.fillMaxSize().sharedPhoto(PHOTO_KEY).background(Color(0xFF3E3C38))) {
                 AsyncImage(s.photo, null, contentScale = ContentScale.FillBounds, modifier = Modifier.fillMaxSize())
-                Canvas(Modifier.fillMaxSize()) {
-                    items.forEachIndexed { i, item ->
-                        val b = item.box ?: return@forEachIndexed
-                        drawRect(if (i == 0) Ink.Accent else Color.White, Offset(b.x.toFloat() * size.width, b.y.toFloat() * size.height), Size(b.width.toFloat() * size.width, b.height.toFloat() * size.height), style = Stroke(3.dp.toPx()))
+                // Dashed outlines draw around each item in turn, once the photo has landed.
+                items.forEachIndexed { i, item ->
+                    val b = item.box ?: return@forEachIndexed
+                    PathDraw(Modifier.matchParentSize(), color = if (i == 0) Ink.Accent else Color.White, strokeWidth = 3.dp, durationMs = 420, delayMs = 300 + 110 * i, dashed = true, key = item) { size ->
+                        listOf(outlineBox(Rect(Offset(b.x.toFloat() * size.width, b.y.toFloat() * size.height), Size(b.width.toFloat() * size.width, b.height.toFloat() * size.height)), 24f))
                     }
                 }
             }
@@ -279,7 +321,12 @@ fun ResultsScreen(app: AppState) {
         Column(Modifier.fillMaxSize().padding(top = 56.dp)) {
             Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 BackButton({ app.session = null; app.reset(Screen.Fetch) })
-                Text("Look what I found", style = hand(30.sp))
+                Text("Look what I found", style = hand(30.sp), modifier = Modifier.weight(1f))
+                app.session?.photo?.let { photo ->
+                    Box(Modifier.padding(end = 6.dp).rotate(4f).shadow(3.dp).background(Ink.White).padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 10.dp)) {
+                        AsyncImage(photo, "Your photo", contentScale = ContentScale.Crop, modifier = Modifier.size(46.dp).sharedPhoto(PHOTO_KEY))
+                    }
+                }
             }
             Row(Modifier.padding(start = 70.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(r.offers.size.toString(), style = serif(18.sp, Ink.Muted))
