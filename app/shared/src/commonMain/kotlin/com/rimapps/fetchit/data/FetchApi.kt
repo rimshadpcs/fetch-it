@@ -78,8 +78,9 @@ class FetchApi(val firebase: Firebase = Firebase(httpClient())) {
         return firebase.stream("purchaseOffer", data) { onDecision(it.to()) }.to()
     }
 
-    suspend fun approvePurchase(purchaseId: String): Purchase =
-        firebase.call("approvePurchase", buildJsonObject { put("purchaseId", purchaseId) }).to()
+    /** [allowCategory]: also add this item's category to the house rules ("Always allow …"). */
+    suspend fun approvePurchase(purchaseId: String, allowCategory: Boolean = false): Purchase =
+        firebase.call("approvePurchase", buildJsonObject { put("purchaseId", purchaseId); if (allowCategory) put("allowCategory", true) }).to()
 
     /** Undo inside the window, or decline an approval request. */
     suspend fun undoPurchase(purchaseId: String): Purchase =

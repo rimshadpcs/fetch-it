@@ -394,10 +394,12 @@ fun RulesEditor(initial: HouseRules, focus: RuleFocus? = null, onChange: (HouseR
         Column(Modifier.rulesSection(focus == RuleFocus.Categories), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("I can shop for…", style = hand(24.sp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                ShopCategory.entries.forEachIndexed { i, c ->
-                    val on = c.slug in r.allowedCategories
-                    Chip(c.label, on, check = true, modifier = Modifier.popIn(200 + 45 * i), onClick = {
-                        update(r.copy(allowedCategories = if (on) r.allowedCategories - c.slug else r.allowedCategories + c.slug))
+                // Every Channel3 root, plus any older sub-category slug still in the rules (so it can be turned off).
+                val slugs = ShopCategory.entries.map { it.slug } + r.allowedCategories.filter { s -> ShopCategory.entries.none { it.slug == s } }
+                slugs.forEachIndexed { i, slug ->
+                    val on = slug in r.allowedCategories
+                    Chip(ShopCategory.labelFor(slug), on, check = true, modifier = Modifier.popIn(200 + 30 * i.coerceAtMost(12)), onClick = {
+                        update(r.copy(allowedCategories = if (on) r.allowedCategories - slug else r.allowedCategories + slug))
                     })
                 }
             }

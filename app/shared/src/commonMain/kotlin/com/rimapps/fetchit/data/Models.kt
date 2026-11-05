@@ -131,7 +131,7 @@ data class HouseRules(
     val currency: String = "USD",
     val monthlyBudget: Double = 200.0,
     val perItemLimit: Double = 75.0,
-    val allowedCategories: List<String> = listOf("home-garden", "clothing", "shoes", "books"),
+    val allowedCategories: List<String> = listOf("home-garden", "apparel-accessories", "media"),
     val askBeforeNewStore: Boolean = true,
     val onlyShipToSavedPlaces: Boolean = true,
     val askIfUnsureAboutSize: Boolean = true,
@@ -205,10 +205,29 @@ data class ActivityEntry(
  * category path is allowed (e.g. home-garden > lighting > lamps > table-lamps).
  */
 enum class ShopCategory(val label: String, val slug: String) {
-    HomeDecor("Home decor", "home-garden"),
-    Clothing("Clothing", "clothing"),
-    Shoes("Shoes", "shoes"),
-    Books("Books", "books"),
+    // Channel3's root categories (GET /v1/categories?roots_only=true), most-used first. An offer passes the
+    // category rule if any slug on its category path is allowed, so a root covers everything under it.
+    HomeGarden("Home & Garden", "home-garden"),
+    Apparel("Clothes, shoes & bags", "apparel-accessories"),
+    HealthBeauty("Health & Beauty", "health-beauty"),
+    Media("Books & media", "media"),
     Electronics("Electronics", "electronics"),
-    GiftCards("Gift cards", "gift-cards"),
+    Furniture("Furniture", "furniture"),
+    Sporting("Sporting goods", "sporting-goods"),
+    Toys("Toys & games", "toys-games"),
+    Baby("Baby & toddler", "baby-toddler"),
+    Pets("Pet supplies", "animals-pet-supplies"),
+    Office("Office supplies", "office-supplies"),
+    Luggage("Luggage & bags", "luggage-bags"),
+    Arts("Arts & entertainment", "arts-entertainment"),
+    Cameras("Cameras & optics", "cameras-optics"),
+    Hardware("Hardware", "hardware"),
+    Vehicles("Vehicles & parts", "vehicles-parts"),
+    ;
+
+    companion object {
+        /** A label for any allowed slug, including older sub-category ones (clothing, shoes, books). */
+        fun labelFor(slug: String): String = entries.firstOrNull { it.slug == slug }?.label
+            ?: slug.split('-').joinToString(" ").replaceFirstChar { it.uppercase() }
+    }
 }

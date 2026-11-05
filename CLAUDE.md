@@ -80,7 +80,7 @@ KMP app ──Firebase Auth──▶ Cloud Functions (TypeScript)
 | `fetchItem` ✅ | photo → items in it ("Which one?") → top 5 offers for one item with live price, colour, sizes, stock (callable, streams) |
 | `agentTurn` | user message/voice text + context → agent reply, picks, actions |
 | `purchaseOffer` ✅ | `{offerId, size?, placeId, requestId}` (requestId = one per Buy tap = purchase id; a repeat returns the same purchase and waits for its outcome) → live price → rules → BLOCKED / NEEDS_APPROVAL (FCM placeholder) / AUTO_BUY (streams decision, 5 s undo, then vault charge) |
-| `approvePurchase` ✅ | `{purchaseId}` after the fingerprint: re-checks live price + hard rules, charges right away |
+| `approvePurchase` ✅ | `{purchaseId, allowCategory?}` after the fingerprint: re-checks live price + hard rules, charges right away; allowCategory adds the item's root category to the rules |
 | `undoPurchase` ✅ | `{purchaseId}`: undo an auto-buy inside the window (nothing charged) or decline an approval |
 | `watchOffer` ✅ | `{offerId, targetPrice, size?, placeId?}` → `users/{uid}/watches/{id}` + Channel3 price tracking |
 | `checkWatches` ✅ | scheduled hourly: live price ≤ target → "Price dropped" activity → same purchase path (rules apply) |
@@ -116,8 +116,14 @@ Outcomes: `AUTO_BUY` (with ~5s undo) · `NEEDS_APPROVAL` · `BLOCKED` (nothing c
 ("$54 over your $75 limit"). Unit tests: `npm test` (`test/rules.test.mjs`).
 | Check | Fails → |
 |---|---|
-| PayPal linked · in stock / still listed (live price) · currency · category in path · monthly budget (hard cap, counts reserved auto-buys) · saved place · requested size missing / sold out | BLOCKED |
-| per-item limit · new store · size not given (ask-if-unsure) · price went up since approval | NEEDS_APPROVAL (approval overrides these, never a block) |
+| PayPal linked · in stock / still listed (live price) · currency · monthly budget (hard cap, counts reserved auto-buys) · saved place · requested size missing / sold out | BLOCKED |
+| category not in the allowed list · per-item limit · new store · size not given (ask-if-unsure) · price went up since approval | NEEDS_APPROVAL (approval overrides these, never a block) |
+
+Categories are Channel3 slugs; an offer passes if any slug on its path is allowed. The app offers the 16 Channel3 roots
+(`ROOT_CATEGORIES` in rules.ts / `ShopCategory`; e.g. perfume = health-beauty > personal-care > cosmetics >
+perfume-cologne). Older rules may hold sub-slugs (clothing, shoes, books: real; gift-cards: never existed); they still
+match and show as extra chips. `approvePurchase {allowCategory: true}` also adds the item's root category to the rules
+in the same transaction and logs a `rules_updated` activity entry ("Always allow Health & Beauty" on the approval sheet).
 
 ### Data (Firestore)
 `users/{uid}/settings/rules` (HouseRules) · `places/{placeId}` (label, fullName, line1, line2, city, state,
@@ -561,3 +567,9 @@ inactive. No Material icons. Adding one: copy its `<path d>` values from `npm pa
       pick), map-pin (ship to, places), pencil (edit), heart (fetched), bell / gear / lock / help / log-out / ruler / dog /
       shield-check (You). Size picks keep the hand-drawn pen loop (`wobblyLoop` drawn on), not the doodle circle icon.
       Mic has no screen yet (voice isn't built). Builds; not yet seen on a device.
+- [~] Category override (Nov 5): a category outside the rules now asks (fingerprint) instead of blocking; Rules lists all
+      16 Channel3 roots incl. Health & Beauty; approval sheet "Always allow <category>". `npm test` 41 (category tests
+      updated), `npm run test:category` (emulators + live Channel3 + sandbox): perfume → NEEDS_APPROVAL with only
+      the category failing → approve + allowCategory → sandbox order `0BU61090EM899792U`, rules gain health-beauty,
+      activity logged. **Not deployed yet** (needs: purchaseOffer, approvePurchase, checkWatches, checkWatchesNow,
+      sweepStuckPurchases, runMaintenance). Not yet seen on a device.

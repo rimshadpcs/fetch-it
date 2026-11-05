@@ -13,6 +13,7 @@
     "test:profile": "node --test test/profile.mjs",
     "test:limits": "node --test test/limits.mjs",
     "test:places": "node --test test/places.mjs",
+    "test:category": "node --test test/category.mjs",
     "test": "npm run build && node --test test/*.test.mjs"
   },
   "engines": {

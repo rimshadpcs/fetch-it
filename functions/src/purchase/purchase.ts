@@ -14,7 +14,7 @@ import { db, monthKey, userDoc } from "../lib/db.js";
 import { PayPal, PayPalError, type ShippingAddress } from "../lib/paypal.js";
 import { InvalidToken, verify, type OfferClaim } from "../lib/sign.js";
 import { notify } from "../push.js";
-import { decide, money, type Decision, type HouseRules, type Profile, type Reason } from "../rules.js";
+import { categoryTitle, decide, money, type Decision, type HouseRules, type Profile, type Reason } from "../rules.js";
 import { fetchLiveOffer, type LiveOffer } from "./live.js";
 import { placeDemoOrder } from "../fulfillment.js";
 import { DEMO_MIN_INSTANCES, ENFORCE_APP_CHECK } from "../options.js";
@@ -438,7 +438,11 @@ export const purchaseOffer = onCall<{ offerId: string; size?: string; placeId: s
 );
 
 /** After the fingerprint on the device. Re-checks the live price and the hard rules, then charges right away. */
-export const approvePurchase = onCall<{ purchaseId: string }, Promise<PurchaseResponse>>(
+/**
+ * After the fingerprint. `allowCategory`: the user also said "always allow" this item's category; its root
+ * category is added to their house rules in the same transaction (and logged), so the next one auto-buys.
+ */
+export const approvePurchase = onCall<{ purchaseId: string; allowCategory?: boolean }, Promise<PurchaseResponse>>(
   { secrets, timeoutSeconds: 60, cors: true, enforceAppCheck: ENFORCE_APP_CHECK },
   async (request) => {
     const uid = requireUid(request.auth?.uid);
@@ -454,6 +458,16 @@ export const approvePurchase = onCall<{ purchaseId: string }, Promise<PurchaseRe
       const cur = (await tx.get(ref)).data() as PurchaseDoc;
       const ctx = await readContext(tx, uid, cur.placeId);
       if (cur.status !== "needs_approval") throw new HttpsError("failed-precondition", `This purchase is already ${cur.status}.`);
+      const root = live.categoryPath[0];
+      if (request.data?.allowCategory === true && root && !live.categoryPath.some((c) => ctx.rules.allowedCategories.includes(c))) {
+        ctx.rules = { ...ctx.rules, allowedCategories: [...ctx.rules.allowedCategories, root] };
+        tx.update(userDoc(uid).collection("settings").doc("rules"), { allowedCategories: FieldValue.arrayUnion(root), updatedAt: FieldValue.serverTimestamp() });
+        tx.set(userDoc(uid).collection("activity").doc(), {
+          type: "rules", status: "rules_updated", purchaseId: ref.id,
+          summary: `${categoryTitle(root)} added to your allowed categories (you OK'd ${cur.title}).`,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+      }
       const input = {
         rules: ctx.rules,
         monthToDate: ctx.monthToDate,

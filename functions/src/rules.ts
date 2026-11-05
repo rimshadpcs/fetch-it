@@ -115,11 +115,12 @@ export function decide(input: RulesInput): { decision: Decision; reasons: Reason
   // Category
   const allowed = offer.categoryPath.some((c) => rules.allowedCategories.includes(c));
   const leaf = offer.categoryPath.at(-1) ?? "uncategorized";
+  // Outside your categories asks first (fingerprint), never blocks: the approval can also add the category.
   add(
     "category",
     allowed,
-    "block",
-    allowed ? `${pretty(leaf)} is in your allowed categories` : `${pretty(offer.categoryPath[0] ?? leaf)} isn't in your allowed categories`,
+    "ask",
+    allowed ? `${pretty(leaf)} is in your allowed categories` : `${categoryTitle(offer.categoryPath[0] ?? leaf)} isn't in your allowed categories`,
   );
 
   // Money (skipped when there's no live price: in_stock already blocks)
@@ -188,6 +189,28 @@ export function decide(input: RulesInput): { decision: Decision; reasons: Reason
       : "AUTO_BUY";
   return { decision, reasons, size: chosenSize };
 }
+
+/** Channel3's root categories (GET /v1/categories?roots_only=true, Nov 2026), with their own titles. */
+export const ROOT_CATEGORIES: Record<string, string> = {
+  "animals-pet-supplies": "Animals & Pet Supplies",
+  "apparel-accessories": "Apparel & Accessories",
+  "arts-entertainment": "Arts & Entertainment",
+  "baby-toddler": "Baby & Toddler",
+  "cameras-optics": "Cameras & Optics",
+  electronics: "Electronics",
+  furniture: "Furniture",
+  hardware: "Hardware",
+  "health-beauty": "Health & Beauty",
+  "home-garden": "Home & Garden",
+  "luggage-bags": "Luggage & Bags",
+  media: "Media",
+  "office-supplies": "Office Supplies",
+  "sporting-goods": "Sporting Goods",
+  "toys-games": "Toys & Games",
+  "vehicles-parts": "Vehicles & Parts",
+};
+
+export const categoryTitle = (slug: string) => ROOT_CATEGORIES[slug] ?? pretty(slug);
 
 const pretty = (slug: string) =>
   slug

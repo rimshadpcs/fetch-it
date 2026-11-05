@@ -41,15 +41,22 @@ test("over the per-item limit → NEEDS_APPROVAL with the overage in words", () 
 
 test("approval turns ask-failures into AUTO_BUY but never overrides a block", () => {
   assert.equal(decide({ ...base, offer: { ...lamp, price: 128 }, approved: true }).decision, "AUTO_BUY");
-  const blocked = decide({ ...base, offer: { ...lamp, categoryPath: ["electronics", "audio"] }, approved: true });
+  const blocked = decide({ ...base, monthToDate: 290, approved: true });
   assert.equal(blocked.decision, "BLOCKED");
 });
 
-test("category outside the allowed list → BLOCKED", () => {
+test("category outside the allowed list → NEEDS_APPROVAL; a fingerprint can override it", () => {
   const r = decide({ ...base, offer: { ...lamp, categoryPath: ["electronics", "audio", "headphones"] } });
-  assert.equal(r.decision, "BLOCKED");
+  assert.equal(r.decision, "NEEDS_APPROVAL");
   assert.deepEqual(failed(r), ["category"]);
   assert.equal(msg(r, "category"), "Electronics isn't in your allowed categories");
+  assert.equal(decide({ ...base, offer: { ...lamp, categoryPath: ["electronics", "audio"] }, approved: true }).decision, "AUTO_BUY");
+});
+
+test("category names use Channel3's own titles", () => {
+  const perfume = { ...lamp, categoryPath: ["health-beauty", "personal-care", "cosmetics", "perfume-cologne"] };
+  assert.equal(msg(decide({ ...base, offer: perfume }), "category"), "Health & Beauty isn't in your allowed categories");
+  assert.equal(decide({ ...base, offer: perfume, rules: { ...rules, allowedCategories: ["health-beauty"] } }).decision, "AUTO_BUY");
 });
 
 test("monthly budget is a hard cap, counting what's already spent", () => {
@@ -104,9 +111,9 @@ test("no size given → ask (or block when ask-if-unsure is off)", () => {
 });
 
 test("several failures are all reported; block wins over ask", () => {
-  const r = decide({ ...base, offer: { ...lamp, price: 128, categoryPath: ["electronics"] }, knownStores: [] });
+  const r = decide({ ...base, monthToDate: 250, offer: { ...lamp, price: 128, categoryPath: ["electronics"] }, knownStores: [] });
   assert.equal(r.decision, "BLOCKED");
-  assert.deepEqual(failed(r).sort(), ["category", "new_store", "per_item_limit"]);
+  assert.deepEqual(failed(r).sort(), ["category", "monthly_budget", "new_store", "per_item_limit"]);
 });
 
 test("store no longer lists it → BLOCKED with no money reasons", () => {
