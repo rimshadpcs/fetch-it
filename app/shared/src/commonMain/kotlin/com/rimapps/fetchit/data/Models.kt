@@ -157,6 +157,24 @@ data class Order(
     val cancellable get() = status == "placed" || status == "confirmed"
 }
 
+/** users/{uid}/saved/{id}: a result the user hearted (saveItem). Price is the last live price seen. */
+@Serializable
+data class SavedItem(
+    val id: String = "",
+    val productId: String = "",
+    val merchant: String = "",
+    val title: String = "",
+    val imageUrl: String? = null,
+    val url: String? = null,
+    val price: Double? = null,
+    val currency: String = "USD",
+) {
+    val key get() = "$productId|$merchant"
+}
+
+@Serializable
+data class SimilarResponse(val offers: List<Offer> = emptyList())
+
 @Serializable
 data class OrderShipTo(val label: String? = null, val city: String = "")
 

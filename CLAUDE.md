@@ -95,6 +95,8 @@ KMP app ──Firebase Auth──▶ Cloud Functions (TypeScript)
 | `addPlace` ✅ | `{label, fullName, line1, line2?, city, state, postalCode, phone?, placeId?, makeDefault?}`: US-validated (`lib/address.ts`; errors per field in `details.fields`), saved confirmed; placeId = edit; adding clears an unconfirmed PayPal suggestion; first place / makeDefault → default; labels unique; max 10 |
 | `deletePlace` ✅ | `{placeId, newDefaultId?}`: deleting the default needs `newDefaultId`; the only place can't go; its price watches move to the default |
 | `setDefaultPlace` ✅ | `{placeId}`: the place Buy starts with and watch buys ship to |
+| `saveItem` | `{offerId, saved}` heart / un-heart a result (or `{savedId, saved: false}` from the Saved list) → `users/{uid}/saved/{sha256(product|store|colour)[:24]}` with the live price; max 100 |
+| `savedOffer` | `{savedId}` → fresh signed offer (same store + colour) with live price, stock, sizes: buying a saved thing goes through the normal purchase path |
 | `advanceOrders` ✅ | scheduled every minute: demo orders placed → confirmed (30 s) → shipped (2 min, PayPal tracking) → delivered (promised date) |
 | `cancelOrder` ✅ | `{orderId}` before shipping: refund the sandbox capture, `cancelled`, roll back month-to-date spend |
 | `sweepStuckPurchases` ✅ | every 5 min: purchases stuck > 2 min in pending_undo/approved/charging → charge (idempotent) or fail |
@@ -594,3 +596,9 @@ inactive. No Material icons. Adding one: copy its `<path d>` values from `npm pa
       5. Order route (`OrderRoute` in OrderScreen): dotted cubic path from the store (cart doodle) to the ship-to place
          (home doodle) with checkpoints; a mini polaroid of the item rides it (placed 0, confirmed 0.22, shipped 0.62,
          delivered 1; 600 ms on open and on each status change); cancelled stays put with a red ✗.
+      6. Results: a heart on every card (`HeartButton`: pop 1.35→1 + pen-stroke burst + tick; red and bolder when saved)
+         → `saveItem`; You → "Saved for later" (`SavedScreen`: notes build in, tap → buy panel at the live price via
+         `savedOffer`, sizes, ship-to sheet, Buy arms after 0.8 s). "More matches" under the grid loads `findSimilar` for
+         the top result into a swipeable fan of tilted polaroids (`PolaroidFan`: drag, spring-snap to the nearest card,
+         tap the front one to pick it for Buy). `npm run test:saved` (emulators + Channel3 detail, 3 tests). **saveItem
+         and savedOffer not deployed yet.**

@@ -1,5 +1,6 @@
 package com.rimapps.fetchit
 
+import com.rimapps.fetchit.ui.SavedScreen
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideOutVertically
@@ -106,6 +107,7 @@ fun App(register: ((() -> Boolean) -> Unit)? = null) {
                                     is Screen.Rules -> RulesScreen(app, screen)
                                     Screen.Account -> AccountScreen(app)
                                     Screen.Places -> PlacesScreen(app)
+                                    Screen.Saved -> SavedScreen(app)
                                     is Screen.PlaceEdit -> PlaceEditScreen(app, screen)
                                     Screen.MotionLab -> MotionLabScreen(app)
                                     Screen.WhichOne -> WhichOneScreen(app)

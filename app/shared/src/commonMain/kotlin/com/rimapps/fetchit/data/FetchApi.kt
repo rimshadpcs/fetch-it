@@ -30,6 +30,14 @@ class FetchApi(val firebase: Firebase = Firebase(httpClient())) {
         firebase.call("deletePlace", buildJsonObject { put("placeId", placeId); newDefaultId?.let { put("newDefaultId", it) } })
     }
     suspend fun setDefaultPlace(placeId: String) { firebase.call("setDefaultPlace", buildJsonObject { put("placeId", placeId) }) }
+    /** Heart (saved = true) or un-heart a result. */
+    suspend fun saveItem(offerId: String, saved: Boolean) { firebase.call("saveItem", buildJsonObject { put("offerId", offerId); put("saved", saved) }) }
+    /** Un-heart from the Saved list (no fresh offer token needed). */
+    suspend fun unsave(savedId: String) { firebase.call("saveItem", buildJsonObject { put("savedId", savedId); put("saved", false) }) }
+    /** A saved thing as a fresh offer with the live price, ready to buy. */
+    suspend fun savedOffer(savedId: String): Offer = firebase.call("savedOffer", buildJsonObject { put("savedId", savedId) }).to()
+    /** "More matches": look-alikes of an offer (Channel3 similar, one search credit). */
+    suspend fun findSimilar(offerId: String): List<Offer> = firebase.call("findSimilar", buildJsonObject { put("offerId", offerId) }).to<SimilarResponse>().offers
     suspend fun setRules(rules: HouseRules): HouseRules = firebase.call("setRules", json.encodeToJsonElement(rules)).to()
 
     /** Only the fields given are changed (sizes: all four are sent, null clears one). */
@@ -105,6 +113,9 @@ class FetchApi(val firebase: Firebase = Firebase(httpClient())) {
     suspend fun order(purchaseId: String): Order? = firebase.getDoc("${users()}/orders/$purchaseId")?.to()
 
     suspend fun profile(): Profile? = firebase.getDoc("${users()}/profile/main")?.to()
+    suspend fun saved(): List<SavedItem> =
+        firebase.listDocs("${users()}/saved", orderBy = "savedAt desc").map { it.to() }
+
     suspend fun places(): List<Place> =
         firebase.listDocs("${users()}/places").map { it.withPlaceId().to() }
 

@@ -14,4 +14,5 @@ export { startPayPalLink, completePayPalLink, confirmPlace } from "./paypalLink.
 export { sweepStuckPurchases, runMaintenance } from "./purchase/cleanup.js";
 export { setProfile, setRules } from "./settings.js";
 export { addPlace, deletePlace, setDefaultPlace } from "./places.js";
+export { saveItem, savedOffer } from "./saved.js";
 export { registerPushToken } from "./push.js";

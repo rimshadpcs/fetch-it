@@ -1,5 +1,6 @@
 package com.rimapps.fetchit
 
+import com.rimapps.fetchit.data.SavedItem
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -42,6 +43,8 @@ sealed interface Screen {
     data class Rules(val focus: RuleFocus? = null) : Screen
     /** The You tab: house rules summary, PayPal, places, sizes, Scout's name, notifications, privacy, help, sign out. */
     data object Account : Screen
+    /** You → Saved: hearted results, each buyable at its live price. */
+    data object Saved : Screen
     /** You & settings → Saved places: list, default, delete. */
     data object Places : Screen
     /** Add (placeId null) or edit a saved place. */
@@ -182,6 +185,7 @@ class AppState(val scope: CoroutineScope, val api: FetchApi = FetchApi()) {
             monthToDate = api.monthToDate()
             activity = api.activity()
             activityLoaded = true
+            saved = api.saved()
         }
     }
 
@@ -202,6 +206,28 @@ class AppState(val scope: CoroutineScope, val api: FetchApi = FetchApi()) {
     var askedPush: Boolean
         get() = store.get("askedPush") == "1"
         set(v) = store.set("askedPush", if (v) "1" else null)
+
+    /** Hearted results (users/{uid}/saved), newest first. */
+    var saved by mutableStateOf<List<SavedItem>>(emptyList())
+
+    fun isSaved(o: Offer) = saved.any { it.productId == o.productId && it.merchant == o.merchant }
+
+    /** Heart / un-heart: the list changes at once, then the server; a failure puts it back. */
+    fun toggleSaved(o: Offer) {
+        val wasSaved = isSaved(o)
+        val before = saved
+        saved = if (wasSaved) saved.filterNot { it.productId == o.productId && it.merchant == o.merchant }
+        else listOf(SavedItem("", o.productId, o.merchant, o.title, o.imageUrl, o.url, o.price, o.currency)) + saved
+        scope.launch {
+            runCatching { api.saveItem(o.offerId, !wasSaved); saved = api.saved() }.onFailure { saved = before }
+        }
+    }
+
+    /** Un-heart from the Saved list (the row is already gone), by its saved id. */
+    fun toggleSavedById(item: SavedItem) = scope.launch {
+        runCatching { api.unsave(item.id); saved = api.saved() }
+            .onFailure { saved = api.saved() }
+    }
 
     /** False until Activity has loaded once (Activity shows blurred placeholder notes until then). */
     var activityLoaded by mutableStateOf(false)

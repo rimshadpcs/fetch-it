@@ -1,5 +1,6 @@
 package com.rimapps.fetchit.ui
 
+import com.rimapps.fetchit.friendly
 import com.rimapps.fetchit.ui.motion.blurIn
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -311,7 +312,12 @@ fun ResultsScreen(app: AppState) {
     val cheapest = r.offers.minByOrNull { it.price }
     val shown = r.offers.let { if (sort == "Cheapest") it.sortedBy { o -> o.price } else it }.filter { !underLimit || limit == null || it.price <= limit }
     var picked by remember { mutableStateOf(r.offers.firstOrNull()) }
-    val offer = picked?.takeIf { it in shown } ?: shown.firstOrNull()
+    // "More matches" (findSimilar), loaded on request into the polaroid fan; a fan pick is what Buy buys too.
+    var more by remember { mutableStateOf<List<Offer>>(emptyList()) }
+    var moreLoading by remember { mutableStateOf(false) }
+    var moreError by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    val offer = picked?.takeIf { it in shown || it in more } ?: shown.firstOrNull()
     var size by remember(offer) { mutableStateOf(offer?.let { defaultSize(app, it) }) }
     // Where it ships: the default place unless the user picks another in the sheet.
     var placeId by remember { mutableStateOf(app.defaultPlace?.placeId) }
@@ -388,12 +394,34 @@ fun ResultsScreen(app: AppState) {
                                             else -> null
                                         },
                                         warn = limit != null && o.price > limit,
+                                        saved = app.isSaved(o), onToggleSave = { app.toggleSaved(o) },
                                         onClick = { picked = o },
                                     )
                                 }
                             }
                         }
                     }
+                }
+                // More matches: a swipeable fan of polaroids (look-alikes of the top pick), loaded on request.
+                Gap(26.dp)
+                if (more.isEmpty()) {
+                    val source = r.offers.firstOrNull()
+                    if (source != null) PillButton(
+                        "More matches", dark = false, height = 50.dp, loading = moreLoading,
+                        onClick = {
+                            moreLoading = true; moreError = null
+                            scope.launch {
+                                runCatching { app.api.findSimilar(source.offerId) }
+                                    .onSuccess { found -> more = found.filter { f -> r.offers.none { it.productId == f.productId && it.merchant == f.merchant } }; if (more.isEmpty()) moreError = "Nothing else like it right now." }
+                                    .onFailure { moreError = it.friendly() }
+                                moreLoading = false
+                            }
+                        },
+                    )
+                    ErrorNote(moreError, Modifier.padding(top = 8.dp))
+                } else {
+                    Text("more matches · swipe", style = hand(22.sp, Ink.Muted))
+                    PolaroidFan(more, offer, onPick = { picked = it }, modifier = Modifier.blurIn(0))
                 }
             }
         }
@@ -481,10 +509,11 @@ private fun defaultSize(app: AppState, o: Offer): String? {
 }
 
 @Composable
-private fun OfferCard(o: Offer, selected: Boolean, height: androidx.compose.ui.unit.Dp, tilt: Float, caption: String?, warn: Boolean, onClick: () -> Unit) {
+private fun OfferCard(o: Offer, selected: Boolean, height: androidx.compose.ui.unit.Dp, tilt: Float, caption: String?, warn: Boolean, saved: Boolean, onToggleSave: () -> Unit, onClick: () -> Unit) {
     Column(Modifier.clickable(onClick = onClick)) {
         Box(Modifier.rotate(tilt).then(if (selected) Modifier.border(3.dp, Ink.Ink) else Modifier)) {
             ProductImage(o.imageUrl, Modifier.fillMaxWidth().height(height))
+            HeartButton(saved, onToggleSave, Modifier.align(Alignment.TopEnd).padding(6.dp))
         }
         Column(Modifier.padding(start = 6.dp, end = 6.dp, top = 8.dp)) {
             Row {
