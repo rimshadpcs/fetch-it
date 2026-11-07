@@ -581,3 +581,5 @@ inactive. No Material icons. Adding one: copy its `<path d>` values from `npm pa
          Fetch: big Scout shrinks into the peek over the viewfinder (`Modifier.sharedShape(SCOUT_KEY)`, shared bounds
          with scale-to-bounds; the screens cross-fade 450 ms). Results: a peek over the Buy bar whose eyes follow the
          last tap (pointer events watched at `PointerEventPass.Initial`, never consumed).
+      2. Welcome headline on two tilted paper-tape strips ("You spot it." / "We fetch it.") that slap on 300 ms apart
+         (`TapeStrip`: 1.3→1 spring, light tap); a pen arrow draws from the lamp polaroid to "spotted at a café".

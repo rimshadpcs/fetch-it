@@ -1,5 +1,10 @@
 package com.rimapps.fetchit.ui
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.rotate
+import com.rimapps.fetchit.ui.motion.rememberHaptics
+import com.rimapps.fetchit.ui.motion.doodleArrow
+import androidx.compose.ui.platform.LocalDensity
 import com.rimapps.fetchit.ui.motion.sharedShape
 import com.rimapps.fetchit.ui.motion.ScoutPeek
 import androidx.compose.animation.core.animateFloatAsState
@@ -114,10 +119,26 @@ fun WelcomeScreen(app: AppState) {
                 Polaroid(null, "striped polo", Modifier.width(170.dp), tilt = 5f, imageHeight = 130.dp, image = Res.drawable.welcome_polo)
                 Tape(Modifier.align(Alignment.TopCenter).offset(y = (-4).dp), rotation = 8f, delayMs = 520)
             }
+            // A pen arrow from the lamp polaroid down to where it was spotted.
+            val d = LocalDensity.current
+            PathDraw(Modifier.matchParentSize(), strokeWidth = 2.dp, durationMs = 380, delayMs = 900) {
+                with(d) { doodleArrow(Offset(92.dp.toPx(), 262.dp.toPx()), Offset(58.dp.toPx(), 300.dp.toPx()), bend = -0.35f, head = 8.dp.toPx()) }
+            }
+            Text("spotted at a café", style = hand(21.sp, Ink.Muted), modifier = Modifier.align(Alignment.BottomStart).offset(24.dp, (-2).dp).rotate(-3f).riseIn(1150, distance = 6.dp))
         }
-        val big = body(46.sp, FontWeight.Medium).copy(letterSpacing = (-1.6).sp)
-        val accent = big.copy(fontFamily = Fonts.serif, fontStyle = FontStyle.Italic, fontWeight = FontWeight.Normal, fontSize = 52.sp)
-        WordByWord(listOf(listOf("You" to big, "spot" to big, "it." to big), listOf("We" to big, "fetch" to accent, "it." to big)), startMs = 350, modifier = Modifier.padding(horizontal = 26.dp, vertical = 8.dp))
+        // The headline on two strips of paper tape, slapped on one after the other.
+        val big = body(40.sp, FontWeight.Medium).copy(letterSpacing = (-1.4).sp)
+        val accent = big.copy(fontFamily = Fonts.serif, fontStyle = FontStyle.Italic, fontWeight = FontWeight.Normal, fontSize = 46.sp)
+        Column(Modifier.padding(horizontal = 18.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            TapeStrip(rotation = -2.5f, delayMs = 450) { Text("You spot it.", style = big) }
+            TapeStrip(Modifier.padding(start = 34.dp), rotation = 1.8f, delayMs = 750) {
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text("We ", style = big, modifier = Modifier.alignByBaseline())
+                    Text("fetch", style = accent, modifier = Modifier.alignByBaseline())
+                    Text(" it.", style = big, modifier = Modifier.alignByBaseline())
+                }
+            }
+        }
         Text(
             "Snap it, and your agent finds it, checks your rules, and pays with PayPal.",
             style = body(16.sp, color = Ink.NavGrey), modifier = Modifier.padding(horizontal = 26.dp).riseIn(900),
@@ -137,20 +158,29 @@ fun WelcomeScreen(app: AppState) {
     }
 }
 
-/** Lines of words that write on one after another (90 ms apart), aligned on their baselines. */
-@OptIn(ExperimentalLayoutApi::class)
+/**
+ * A strip of paper tape with [content] on it, slapped onto the page after [delayMs]: drops in from 1.3× with a
+ * springy settle at [rotation] and a light tap (a fade with reduce motion).
+ */
 @Composable
-private fun WordByWord(lines: List<List<Pair<String, TextStyle>>>, startMs: Int, modifier: Modifier = Modifier) {
-    var i = 0
-    Column(modifier) {
-        lines.forEach { words ->
-            Row(horizontalArrangement = Arrangement.spacedBy(11.dp)) {
-                words.forEach { (w, style) ->
-                    Text(w, style = style.copy(lineHeight = 48.sp), modifier = Modifier.alignByBaseline().riseIn(startMs + 90 * i++, distance = 10.dp, durationMs = 260))
-                }
-            }
-        }
+private fun TapeStrip(modifier: Modifier = Modifier, rotation: Float, delayMs: Int, content: @Composable () -> Unit) {
+    val reduce = LocalReduceMotion.current
+    val haptics = rememberHaptics()
+    val a = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(Unit) {
+        delay(delayMs.toLong())
+        if (reduce) { a.animateTo(1f, tween(200)); return@LaunchedEffect }
+        launch { delay(110); haptics.tap() }
+        a.animateTo(1f, uiSpring(stiffness = 700f, damping = 0.5f))
     }
+    Box(
+        modifier.graphicsLayer {
+            val v = a.value
+            alpha = (v * 3f).coerceAtMost(1f)
+            rotationZ = rotation
+            if (!reduce) { val sc = 1.3f - 0.3f * v; scaleX = sc; scaleY = sc; rotationZ = rotation * (2f - v) }
+        }.background(Color(0xFFEDE6D3).copy(alpha = 0.92f)).padding(horizontal = 14.dp, vertical = 2.dp),
+    ) { content() }
 }
 
 /** Step 1: link PayPal (vault, nothing charged). PayPal's shipping address, if any, comes back as a suggestion for step 2. */
