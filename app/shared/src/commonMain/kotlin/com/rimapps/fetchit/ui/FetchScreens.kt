@@ -1,5 +1,7 @@
 package com.rimapps.fetchit.ui
 
+import androidx.compose.ui.platform.LocalDensity
+import com.rimapps.fetchit.ui.motion.wobblyLoop
 import com.rimapps.fetchit.friendly
 import com.rimapps.fetchit.ui.motion.blurIn
 import androidx.compose.ui.layout.positionInRoot
@@ -273,11 +275,19 @@ fun WhichOneScreen(app: AppState) {
             // Photo with the item boxes drawn on top; tapping a box picks it.
             Box(Modifier.fillMaxSize().sharedPhoto(PHOTO_KEY).background(Color(0xFF3E3C38))) {
                 AsyncImage(s.photo, null, contentScale = ContentScale.FillBounds, modifier = Modifier.fillMaxSize())
-                // Dashed outlines draw around each item in turn, once the photo has landed.
+                // A pen loop circles each item in turn (like the size picks), once the photo has landed: an ellipse
+                // big enough to go round the item's box, overshooting where the pen started.
+                val pad = with(LocalDensity.current) { 10.dp.toPx() }
                 items.forEachIndexed { i, item ->
                     val b = item.box ?: return@forEachIndexed
-                    PathDraw(Modifier.matchParentSize(), color = if (i == 0) Ink.Accent else Color.White, strokeWidth = 3.dp, durationMs = 420, delayMs = 300 + 110 * i, dashed = true, key = item) { size ->
-                        listOf(outlineBox(Rect(Offset(b.x.toFloat() * size.width, b.y.toFloat() * size.height), Size(b.width.toFloat() * size.width, b.height.toFloat() * size.height)), 24f))
+                    PathDraw(Modifier.matchParentSize(), color = if (i == 0) Ink.Accent else Color.White, strokeWidth = 3.5.dp, durationMs = 450, delayMs = 300 + 140 * i, key = item) { size ->
+                        val box = Rect(Offset(b.x.toFloat() * size.width, b.y.toFloat() * size.height), Size(b.width.toFloat() * size.width, b.height.toFloat() * size.height))
+                        // An ellipse through a box's corners is √2 × the box; a bit less still clears it with the wobble.
+                        val w = box.width * 1.28f + pad; val h = box.height * 1.24f + pad
+                        // Kept inside the photo (a tall item would otherwise loop off its edge).
+                        val loop = Rect(box.center.x - w / 2, box.center.y - h / 2, box.center.x + w / 2, box.center.y + h / 2)
+                            .intersect(Rect(pad / 2, pad / 2, size.width - pad / 2, size.height - pad / 2))
+                        listOf(wobblyLoop(loop, seed = i + 2))
                     }
                 }
             }

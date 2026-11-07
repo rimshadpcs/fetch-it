@@ -240,12 +240,13 @@ fun LinkPayPalScreen(app: AppState) {
     }
 
     Column(Modifier.fillMaxSize().dotted().padding(top = 52.dp, bottom = 34.dp)) {
-        StepHeader(1, onBack = { app.back() })
+        StepHeader(1, onBack = { app.back() }, peek = false)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Gap(10.dp)
             Row(verticalAlignment = Alignment.Bottom) {
                 Text("First, how should I pay?", style = hand(34.sp), modifier = Modifier.weight(1f))
-                Dog(58.dp, if (hop) DogMood.Excited else DogMood.Wag)
+                // The whole Scout, wagging (hops when PayPal links).
+                Dog(92.dp, if (hop) DogMood.Excited else DogMood.Wag, Modifier.popIn(200))
             }
             Text("Link PayPal once. I'll only spend inside the house rules you set next.", style = body(16.sp, color = Ink.Muted))
             PayPalCard(linked, linkedEmail, stampIt = justLinked)
@@ -650,7 +651,7 @@ fun ReadyScreen(app: AppState) {
     LaunchedEffect(name) { if (typed) { typing = true; delay(700); typing = false } }
     val tilt by animateFloatAsState(if (typing) 12f else 0f, uiSpring(stiffness = 300f), label = "tilt")
     Column(Modifier.fillMaxSize().dotted().padding(top = 52.dp, bottom = 34.dp)) {
-        StepHeader(5, onBack = { app.back() })
+        StepHeader(5, onBack = { app.back() }, peek = false)
         Column(Modifier.weight(1f).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text("Meet your fetcher.", style = hand(36.sp))
             Box(Modifier.fillMaxWidth().height(190.dp), contentAlignment = Alignment.Center) {

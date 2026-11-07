@@ -5,15 +5,12 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -37,19 +34,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.rotate
-import androidx.compose.ui.graphics.drawscope.scale
-import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -69,17 +60,16 @@ import com.rimapps.fetchit.ui.icons.DoodleIcon
 import com.rimapps.fetchit.ui.motion.LocalReduceMotion
 import com.rimapps.fetchit.ui.motion.rememberHaptics
 import com.rimapps.fetchit.ui.motion.uiSpring
-import kotlinx.coroutines.launch
 
 /** The three tabs. Everything else is pushed on top of one of them. */
 val TABS = setOf<Screen>(Screen.Activity, Screen.Fetch, Screen.Account)
 
 /** Space a tab screen leaves at the bottom for the floating bar (bar + raised Fetch button + gutter). */
-val NAV_SPACE: Dp = 122.dp
+val NAV_SPACE: Dp = 118.dp
 
 private val BAR_HEIGHT = 68.dp
-private val RAISE = 30.dp // bar top, below the nav top: the Fetch circle (top at 20 dp in its 84 dp box) sits 10 dp above it
-private val CENTER_GAP = 96.dp
+private val RAISE = 28.dp // the bar starts this far down: the 80 dp Fetch button sits a third out of it
+private val CENTER_GAP = 104.dp
 private val PILL_WIDTH = 96.dp
 
 /**
@@ -154,41 +144,21 @@ private fun AttentionDot(visible: Boolean, modifier: Modifier) {
     }
 }
 
-private fun path(d: String) = PathParser().parsePathString(d).toPath()
-// The mascot's own floppy ears (DogMood's viewBox), hung off the button's top corners.
-private val earL = path("M23 22 C10 16 3 30 7 43 C10 49 18 44 21 33 Z")
-private val earR = path("M57 22 C70 16 77 30 73 43 C70 49 62 44 59 33 Z")
-
 /**
- * The center Fetch button: 64 dp black circle raised 10 dp above the bar, the camera doodle in white, two floppy
- * dog ears on top. Press 0.92 with a spring back; the ears flop out once per tap.
+ * The center Fetch button: an 80 dp black circle sitting a third out of the bar, ringed in the bar's white so it
+ * looks set into it, with the camera doodle in white. Press 0.92 with a spring back.
  */
 @Composable
 private fun FetchButton(modifier: Modifier, onClick: () -> Unit) {
     val source = remember { MutableInteractionSource() }
-    val scope = rememberCoroutineScope()
-    val reduce = LocalReduceMotion.current
-    val flop = remember { Animatable(0f) }
-    Box(modifier.size(84.dp, 84.dp).pressScale(source, 0.92f)) {
-        Canvas(Modifier.fillMaxSize()) {
-            val u = size.width / 84f // dp → px for this canvas
-            val s = 0.62f * u
-            val f = flop.value
-            // Left ear attaches at the circle's upper left, right ear at the upper right; flop swings them outward.
-            translate(10.6f * u, 10.9f * u) { scale(s, Offset.Zero) { rotate(18f * f, Offset(21f, 24f)) { drawPath(earL, Ink.Ink) } } }
-            translate(23.8f * u, 10.9f * u) { scale(s, Offset.Zero) { rotate(-18f * f, Offset(59f, 24f)) { drawPath(earR, Ink.Ink) } } }
-        }
-        Box(
-            Modifier.align(Alignment.BottomCenter).size(64.dp).shadow(10.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.3f)).clip(CircleShape).background(Ink.Ink)
-                .border(2.dp, Ink.Ink, CircleShape)
-                .clickable(source, indication = null, role = Role.Button) {
-                    if (!reduce) scope.launch { flop.snapTo(0f); flop.animateTo(0f, keyframes { durationMillis = 520; 1f at 120; -0.35f at 300; 0.12f at 420 }) }
-                    onClick()
-                }
-                .semantics { contentDescription = "Fetch"; role = Role.Button },
-            contentAlignment = Alignment.Center,
-        ) {
-            DoodleIcon(Doodle.Camera, null, size = 30.dp, color = Ink.White, strokeWidth = 4.2f)
-        }
+    Box(
+        modifier.size(80.dp).pressScale(source, 0.92f)
+            .shadow(12.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.35f)).clip(CircleShape).background(Ink.White).padding(5.dp)
+            .clip(CircleShape).background(Ink.Ink)
+            .clickable(source, indication = null, role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = "Fetch"; role = Role.Button },
+        contentAlignment = Alignment.Center,
+    ) {
+        DoodleIcon(Doodle.Camera, null, size = 34.dp, color = Ink.White, strokeWidth = 4.2f)
     }
 }

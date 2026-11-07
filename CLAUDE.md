@@ -195,8 +195,8 @@ Onboarding: Welcome → Link PayPal → Where should I deliver? (PayPal's addres
 different address → form) → Set house rules → Your sizes (optional) → Meet your fetcher (name the dog)
 Main: Fetch (camera / Upload / Voice) → Look what I found → Refine by voice → Fetched (auto-bought, undo) |
 Needs your OK (biometric) → Activity · You
-Bottom nav (`ui/Nav.kt`, drawn once in `App` outside the screen switcher): Activity · **Fetch** (raised 64 dp black
-button, camera doodle, floppy ears; tapping it on Fetch opens the camera) · You. No "+" (Fetch has Upload). The light
+Bottom nav (`ui/Nav.kt`, drawn once in `App` outside the screen switcher): Activity · **Fetch** (80 dp black circle
+sitting a third out of the bar, ringed in white, camera doodle; no ears; tapping it on Fetch opens the camera) · You. No "+" (Fetch has Upload). The light
 pill slides between Activity and You; Activity has a red dot while a purchase needs your OK (`AppState.needsApproval`).
 You (former Account): house rules summary → Rules, then PayPal, saved places, sizes, fetcher's name (long-press: Motion
 lab), notifications, privacy, help, sign out. Rules is a pushed screen: from You, the budget chip on Fetch, or "Change
@@ -618,3 +618,7 @@ inactive. No Material icons. Adding one: copy its `<path d>` values from `npm pa
          ScoutHero face scaled into the head (big outlined eyes with pupils + highlight, patch behind the right eye,
          nose, smile, tongue; closed-eye arcs for blink/sleep); the app icon (adaptive foreground + monochrome, PNG
          mipmaps, iOS 1024) uses the same face. The notification icon is unchanged (a one-colour silhouette).
+      Nov 7 follow-ups: one Scout per onboarding screen (`StepHeader(peek = false)` on Link PayPal, which shows the whole
+      Scout at 92 dp wagging, and on Meet your fetcher); Wag is livelier (±15°, 0.5 s); Which one? circles each item
+      with a drawn-on pen loop (`wobblyLoop` sized ~1.28 × 1.24 the box + 10 dp, kept inside the photo) instead of
+      dashed boxes.

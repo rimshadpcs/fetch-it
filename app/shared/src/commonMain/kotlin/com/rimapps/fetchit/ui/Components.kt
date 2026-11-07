@@ -111,9 +111,9 @@ fun BackButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
     }
 }
 
-/** Onboarding header: back, "Step N of 5" chip, 5-segment progress. */
+/** Onboarding header: back, "Step N of 5" chip, 5-segment progress, and (unless [peek] is off) Scout peeking over the page. */
 @Composable
-fun StepHeader(step: Int, total: Int = 5, onBack: (() -> Unit)?) {
+fun StepHeader(step: Int, total: Int = 5, onBack: (() -> Unit)?, peek: Boolean = true) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (onBack != null) BackButton(onBack) else Box(Modifier.size(44.dp))
@@ -132,8 +132,8 @@ fun StepHeader(step: Int, total: Int = 5, onBack: (() -> Unit)?) {
                 }
             }
         }
-        // Scout's ears and eyes over the top edge of the page.
-        ScoutPeek(58.dp, Modifier.align(Alignment.End).padding(end = 8.dp), showing = 0.55f, delayMs = 300)
+        // Scout's ears and eyes over the top edge of the page (off on steps that show the whole Scout).
+        if (peek) ScoutPeek(58.dp, Modifier.align(Alignment.End).padding(end = 8.dp), showing = 0.55f, delayMs = 300)
     }
 }
 

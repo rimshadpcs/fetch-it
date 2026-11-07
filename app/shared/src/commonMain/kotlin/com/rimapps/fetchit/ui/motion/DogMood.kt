@@ -96,7 +96,7 @@ private fun pose(mood: DogMood, t: Long, bone: Boolean, shake: Float): DogPose {
     val breathe = 1f + 0.015f * wave(2.4f)
     return when (mood) {
         DogMood.Idle -> DogPose(tail = 4f * wave(1.6f), breathe = breathe, bone = bone)
-        DogMood.Wag -> DogPose(tail = if (t == 0L) 0f else 1f + 9f * wave(0.84f), breathe = breathe, bone = bone)
+        DogMood.Wag -> DogPose(tail = if (t == 0L) 0f else 2f + 15f * wave(0.5f), breathe = breathe, bone = bone)
         DogMood.Sniffing -> {
             // Nose down, searching side to side; the nose twitches in short bursts, ears bounce.
             val burst = (s % 1.2f) < 0.5f
