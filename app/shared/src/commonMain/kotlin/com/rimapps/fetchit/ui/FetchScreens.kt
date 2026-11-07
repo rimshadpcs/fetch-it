@@ -1,5 +1,7 @@
 package com.rimapps.fetchit.ui
 
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.StrokeCap
 import kotlinx.datetime.toLocalDateTime
 import com.rimapps.fetchit.ui.motion.riseIn
 import com.rimapps.fetchit.ui.motion.popIn
@@ -176,7 +178,7 @@ fun FetchScreen(app: AppState) {
                     // Scout peeks over the top of the viewfinder (big Scout from onboarding shrinks into this).
                     ScoutPeek(96.dp, Modifier.sharedShape(SCOUT_KEY), showing = 0.6f)
                     Box(
-                        Modifier.fillMaxWidth().weight(1f).rotate(-1f).background(Color(0xFF3E3C38)).clickable { photos.takePhoto() },
+                        Modifier.fillMaxWidth().weight(1f).rotate(-1f).background(Color(0xFF3E3C38)).viewfinderCorners().clickable { photos.takePhoto() },
                         contentAlignment = Alignment.Center,
                     ) {
                         Text("point me at it", style = hand(24.sp, Ink.White))
@@ -194,6 +196,7 @@ fun FetchScreen(app: AppState) {
                         contentAlignment = Alignment.Center,
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            DoodleIcon(Doodle.Upload, null, size = 56.dp, strokeWidth = 3.6f)
                             Text("Upload a photo", style = body(20.sp, FontWeight.SemiBold))
                             Text("screenshots work too!", style = hand(21.sp, Ink.Muted), modifier = Modifier.rotate(-2f))
                         }
@@ -201,6 +204,22 @@ fun FetchScreen(app: AppState) {
                 }
             }
         }
+    }
+}
+
+/** A camera viewfinder's four corner brackets, in white, inset from the edges. */
+private fun Modifier.viewfinderCorners() = drawWithContent {
+    drawContent()
+    val inset = 18.dp.toPx(); val arm = 34.dp.toPx(); val w = 4.dp.toPx()
+    val c = Color.White.copy(alpha = 0.9f)
+    val l = inset; val t = inset; val r = size.width - inset; val b = size.height - inset
+    listOf(
+        listOf(Offset(l, t + arm), Offset(l, t), Offset(l + arm, t)),
+        listOf(Offset(r - arm, t), Offset(r, t), Offset(r, t + arm)),
+        listOf(Offset(r, b - arm), Offset(r, b), Offset(r - arm, b)),
+        listOf(Offset(l + arm, b), Offset(l, b), Offset(l, b - arm)),
+    ).forEach { (a, corner, z) ->
+        drawPath(androidx.compose.ui.graphics.Path().apply { moveTo(a.x, a.y); lineTo(corner.x, corner.y); lineTo(z.x, z.y) }, c, style = Stroke(w, cap = StrokeCap.Round, join = StrokeJoin.Round))
     }
 }
 
