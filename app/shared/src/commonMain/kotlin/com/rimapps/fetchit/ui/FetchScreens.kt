@@ -175,32 +175,33 @@ fun FetchScreen(app: AppState) {
                     PillButton("Show me", onClick = { app.go(if (ready.status == "choose") Screen.WhichOne else Screen.Results) })
                     PillButton("Start over", dark = false, height = 52.dp, onClick = { app.session = null })
                 }
-            } else if (mode == "Snap") {
-                Column(Modifier.weight(1f).padding(start = 22.dp, end = 22.dp, top = 6.dp, bottom = 22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    // Scout peeks over the top of the viewfinder (big Scout from onboarding shrinks into this).
-                    ScoutPeek(96.dp, Modifier.sharedShape(SCOUT_KEY), showing = 0.6f)
-                    Box(
-                        Modifier.fillMaxWidth().weight(1f).rotate(-1f).background(Color(0xFF3E3C38)).viewfinderCorners().clickable { photos.takePhoto() },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text("point me at it", style = hand(24.sp, Ink.White))
-                    }
-                    Gap(16.dp)
-                    Box(Modifier.size(78.dp).shadow(6.dp, CircleShape).roundButton({ photos.takePhoto() }).background(Ink.White), contentAlignment = Alignment.Center) {
-                        Box(Modifier.size(58.dp).clip(CircleShape).background(Ink.Ink))
-                    }
-                }
             } else {
-                Column(Modifier.weight(1f).padding(22.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Box(
-                        Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(32.dp)).background(Color.White.copy(alpha = 0.6f))
-                            .dashedBorder().clickable { photos.pickPhoto() },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            DoodleIcon(Doodle.Upload, null, size = 56.dp, strokeWidth = 3.6f)
-                            Text("Upload a photo", style = body(20.sp, FontWeight.SemiBold))
-                            Text("screenshots work too!", style = hand(21.sp, Ink.Muted), modifier = Modifier.rotate(-2f))
+                // Scout peeks over the top of the card on both Snap and Upload (big Scout from onboarding shrinks into
+                // this), and stays put when you switch between them.
+                Column(Modifier.weight(1f).padding(start = 22.dp, end = 22.dp, top = 6.dp, bottom = 22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    ScoutPeek(96.dp, Modifier.sharedShape(SCOUT_KEY), showing = 0.6f)
+                    if (mode == "Snap") {
+                        Box(
+                            Modifier.fillMaxWidth().weight(1f).rotate(-1f).background(Color(0xFF3E3C38)).viewfinderCorners().clickable { photos.takePhoto() },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text("point me at it", style = hand(24.sp, Ink.White))
+                        }
+                        Gap(16.dp)
+                        Box(Modifier.size(78.dp).shadow(6.dp, CircleShape).roundButton({ photos.takePhoto() }).background(Ink.White), contentAlignment = Alignment.Center) {
+                            Box(Modifier.size(58.dp).clip(CircleShape).background(Ink.Ink))
+                        }
+                    } else {
+                        Box(
+                            Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(32.dp)).background(Color.White.copy(alpha = 0.6f))
+                                .dashedBorder().clickable { photos.pickPhoto() },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                DoodleIcon(Doodle.Upload, null, size = 56.dp, strokeWidth = 3.6f)
+                                Text("Upload a photo", style = body(20.sp, FontWeight.SemiBold))
+                                Text("screenshots work too!", style = hand(21.sp, Ink.Muted), modifier = Modifier.rotate(-2f))
+                            }
                         }
                     }
                 }
