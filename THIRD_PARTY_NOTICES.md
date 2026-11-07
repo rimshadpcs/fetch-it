@@ -7,7 +7,7 @@ Fetch It includes the following third-party material.
 - Source: https://github.com/oreo-design/doodle-icons (npm `@oreo-design/doodle-icons` 0.3.0)
 - Used in: `app/shared/src/commonMain/kotlin/com/rimapps/fetchit/ui/icons/DoodleIcons.kt` (SVG path data converted to
   Compose ImageVectors: receipt, notebook, home, camera, mic, search, map-pin, bell, gear, pencil, check, star, circle,
-  arrow-up-right, arrow-right, heart, paw-print, ruler, dog, lock, circle-question-mark, log-out, shield-check)
+  arrow-up-right, arrow-right, heart, paw-print, ruler, dog, lock, circle-question-mark, log-out, shield-check, cart)
 - License: MIT
 
 ```

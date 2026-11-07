@@ -591,3 +591,6 @@ inactive. No Material icons. Adding one: copy its `<path d>` values from `npm pa
       4. Loading: `Modifier.blurIn(index)` (blur 14→0 dp, fade up, slight rise, 60 ms stagger; fade under reduce motion;
          below Android 12 blur isn't drawn) on Results cards and Activity cards; Activity shows blurred placeholder notes
          until its first load (`AppState.activityLoaded`).
+      5. Order route (`OrderRoute` in OrderScreen): dotted cubic path from the store (cart doodle) to the ship-to place
+         (home doodle) with checkpoints; a mini polaroid of the item rides it (placed 0, confirmed 0.22, shipped 0.62,
+         delivered 1; 600 ms on open and on each status change); cancelled stays put with a red ✗.

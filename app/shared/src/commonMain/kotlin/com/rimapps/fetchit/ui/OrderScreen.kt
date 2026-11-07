@@ -1,5 +1,26 @@
 package com.rimapps.fetchit.ui
 
+import com.rimapps.fetchit.ui.motion.inkStroke
+import com.rimapps.fetchit.ui.motion.doodleCross
+import com.rimapps.fetchit.ui.motion.PathDraw
+import com.rimapps.fetchit.ui.motion.LocalReduceMotion
+import com.rimapps.fetchit.ui.icons.DoodleIcon
+import com.rimapps.fetchit.ui.icons.Doodle
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.PathMeasure
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.shadow
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.Canvas
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Animatable
 import com.rimapps.fetchit.ui.components.PillButton
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -82,6 +103,7 @@ fun OrderScreen(app: AppState, screen: Screen.Order) {
                     Text("Back on your PayPal · refund ${r.id} (${r.status.lowercase()})", style = body(13.sp, color = Ink.Muted))
                 }
             }
+            if (o != null) OrderRoute(o, o.items.firstOrNull()?.imageUrl ?: first?.imageUrl)
             Text("timeline", style = hand(22.sp, Ink.Muted))
             PaperNote(Modifier.fillMaxWidth(), tilt = 0f) {
                 if (timeline.isEmpty()) RunningDog(60.dp)
@@ -120,5 +142,78 @@ fun OrderScreen(app: AppState, screen: Screen.Order) {
                 style = body(13.sp, color = Ink.Grey), modifier = Modifier.padding(horizontal = 24.dp),
             )
         }
+    }
+}
+
+/** How far along the route each status is (store 0 → Home 1). */
+private fun routeFraction(status: String) = when (status) {
+    "confirmed" -> 0.22f
+    "shipped" -> 0.62f
+    "delivered" -> 1f
+    else -> 0f
+}
+
+/**
+ * A dotted route from the store to Home, with a small polaroid of the item travelling along it as the order
+ * advances (placed → confirmed → shipped → delivered). It rolls from the store to where the order is when the
+ * screen opens, then moves on as the status changes. Cancelled: it stays put with a red ✗.
+ */
+@Composable
+private fun OrderRoute(o: Order, imageUrl: String?) {
+    val reduce = LocalReduceMotion.current
+    val cancelled = o.status == "cancelled" || o.status == "cancelling"
+    val target = routeFraction(o.status)
+    val frac = remember { Animatable(0f) }
+    LaunchedEffect(target) { if (reduce) frac.snapTo(target) else frac.animateTo(target, tween(600, easing = FastOutSlowInEasing)) }
+    PaperNote(Modifier.fillMaxWidth(), tilt = -0.4f) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            DoodleIcon(Doodle.Cart, null, size = 22.dp, color = Ink.Muted)
+            Text(" ${o.retailer.removePrefix("www.")}", style = body(13.sp, FontWeight.SemiBold, Ink.Muted), maxLines = 1, modifier = Modifier.weight(1f))
+            Text("${o.shipTo?.label ?: "Home"} ", style = body(13.sp, FontWeight.SemiBold, Ink.Muted))
+            DoodleIcon(Doodle.Home, null, size = 22.dp, color = if (o.status == "delivered") Ink.Ink else Ink.Muted)
+        }
+        BoxWithConstraints(Modifier.fillMaxWidth().height(96.dp)) {
+            val density = LocalDensity.current
+            val route = remember(maxWidth) {
+                with(density) {
+                    val w = maxWidth.toPx(); val h = 96.dp.toPx()
+                    Path().apply {
+                        moveTo(12.dp.toPx(), h * 0.62f)
+                        cubicTo(w * 0.32f, h * 0.05f, w * 0.55f, h * 1.05f, w - 12.dp.toPx(), h * 0.42f)
+                    }
+                }
+            }
+            val measure = remember(route) { PathMeasure().apply { setPath(route, false) } }
+            Canvas(Modifier.matchParentSize()) {
+                drawPath(route, Ink.LightGrey, style = inkStroke(2.2.dp.toPx(), dashed = true, dash = 4.dp.toPx()))
+                // Checkpoints: store, confirmed, shipped, home.
+                listOf(0f, 0.22f, 0.62f, 1f).forEach { f ->
+                    val pos = measure.getPosition(measure.length * f)
+                    val reached = f <= target && !cancelled
+                    drawCircle(if (reached) Ink.Ink else Ink.TrackOff, 4.dp.toPx(), pos)
+                }
+            }
+            // The item, travelling.
+            val pos = measure.getPosition(measure.length * frac.value)
+            with(density) {
+                Box(
+                    Modifier.offset { IntOffset((pos.x - 21.dp.toPx()).toInt(), (pos.y - 50.dp.toPx()).toInt()) }
+                        .graphicsLayer { rotationZ = -5f }.shadow(3.dp).background(Ink.White).padding(start = 3.dp, end = 3.dp, top = 3.dp, bottom = 8.dp),
+                ) {
+                    ProductImage(imageUrl, Modifier.size(36.dp))
+                    if (cancelled) PathDraw(Modifier.matchParentSize(), color = Ink.Accent, strokeWidth = 3.dp) { sz -> doodleCross(Rect(Offset.Zero, sz)) }
+                }
+            }
+        }
+        Text(
+            when (o.status) {
+                "placed" -> "Waiting at the store"
+                "confirmed" -> "The store has it"
+                "shipped" -> "On its way" + (o.trackingNumber?.let { " · $it" } ?: "")
+                "delivered" -> "Delivered to ${o.shipTo?.label ?: "Home"}"
+                else -> statusLabel(o.status)
+            },
+            style = hand(20.sp),
+        )
     }
 }

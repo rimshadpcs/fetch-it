@@ -151,10 +151,14 @@ data class Order(
     val promisedDeliveryDate: String? = null,
     val trackingNumber: String? = null,
     val refund: Refund? = null,
+    val shipTo: OrderShipTo? = null,
 ) {
     /** Before it ships, an order can be cancelled (and refunded). */
     val cancellable get() = status == "placed" || status == "confirmed"
 }
+
+@Serializable
+data class OrderShipTo(val label: String? = null, val city: String = "")
 
 @Serializable
 data class OrderItem(val title: String = "", val imageUrl: String? = null, val size: String? = null)
