@@ -206,6 +206,8 @@ data class ActivityEntry(
     val purchaseId: String? = null,
     val status: String = "",
     val summary: String = "",
+    /** Watch buys: the price when watching started (struck through next to [price]). */
+    val priceWas: Double? = null,
     val decision: String? = null,
     val reasons: List<Reason> = emptyList(),
     val title: String? = null,

@@ -1,5 +1,8 @@
 package com.rimapps.fetchit.ui
 
+import com.rimapps.fetchit.ui.motion.riseIn
+import com.rimapps.fetchit.ui.motion.PathDraw
+import androidx.compose.ui.graphics.Path
 import com.rimapps.fetchit.ui.motion.blurIn
 import androidx.compose.ui.draw.blur
 import androidx.compose.animation.AnimatedVisibility
@@ -118,6 +121,23 @@ fun ActivityScreen(app: AppState) {
     }
 }
 
+/**
+ * The old price gets a pen line struck through it (300 ms), then the new price rises in beside it, counting down
+ * from the old one. With reduce motion both just show, the old one struck.
+ */
+@Composable
+private fun PriceDrop(was: Double, now: Double, currency: String, modifier: Modifier = Modifier) {
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Box {
+            Text(money(was, currency), style = body(14.sp, FontWeight.SemiBold, Ink.Grey))
+            PathDraw(Modifier.matchParentSize(), color = Ink.Accent, strokeWidth = 2.dp, durationMs = 300, delayMs = 250) { sz ->
+                listOf(Path().apply { moveTo(-2f, sz.height * 0.6f); quadraticTo(sz.width * 0.5f, sz.height * 0.42f, sz.width + 2f, sz.height * 0.5f) })
+            }
+        }
+        CountUpMoney(now, serif(17.sp, Ink.Ink), Modifier.riseIn(250, distance = 8.dp), currency = currency, from = was)
+    }
+}
+
 /** The shape of an Activity card with gray bars for text: drawn blurred while Activity loads. */
 @Composable
 private fun PlaceholderNote(tilt: Float) {
@@ -136,7 +156,9 @@ private fun PlaceholderNote(tilt: Float) {
 @Composable
 private fun ActivityCard(app: AppState, e: ActivityEntry, tilt: Float) {
     val label = statusLabel(e.status)
-    val heading = listOfNotNull(label, e.price?.let { money(it, e.currency ?: "USD") }).joinToString(" · ")
+    // A watched item bought after a drop: "Bought · $59.99 → $42.99", the old price struck through.
+    val dropped = e.priceWas != null && e.price != null && e.price < e.priceWas - 0.005
+    val heading = if (dropped) "$label ·" else listOfNotNull(label, e.price?.let { money(it, e.currency ?: "USD") }).joinToString(" · ")
     PaperNote(Modifier.fillMaxWidth(), tilt = tilt) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             if (e.imageUrl != null) ProductImage(e.imageUrl, Modifier.size(72.dp).rotate(-tilt * 2))
@@ -144,7 +166,10 @@ private fun ActivityCard(app: AppState, e: ActivityEntry, tilt: Float) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (e.status == "needs_approval" || e.status == "blocked") Box(Modifier.padding(end = 6.dp).size(8.dp).clip(CircleShape).background(Ink.Accent))
                     if (e.status in setOf("completed", "approved", "confirmed", "shipped", "delivered")) DoodleIcon(Doodle.Check, null, Modifier.padding(end = 4.dp), size = 16.dp, color = Ink.Muted, strokeWidth = 4.6f)
-                    Text(heading, style = body(14.sp, FontWeight.SemiBold, Ink.Muted), modifier = Modifier.weight(1f))
+                    if (dropped) Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                        Text(heading, style = body(14.sp, FontWeight.SemiBold, Ink.Muted))
+                        PriceDrop(e.priceWas!!, e.price!!, e.currency ?: "USD", Modifier.padding(start = 6.dp))
+                    } else Text(heading, style = body(14.sp, FontWeight.SemiBold, Ink.Muted), modifier = Modifier.weight(1f))
                     Text(timeAgo(e.createdAt), style = serif(15.sp, Ink.Muted))
                 }
                 e.title?.let { Text(it.lowercase(), style = hand(19.sp), maxLines = 2) }

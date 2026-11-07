@@ -602,3 +602,8 @@ inactive. No Material icons. Adding one: copy its `<path d>` values from `npm pa
          the top result into a swipeable fan of tilted polaroids (`PolaroidFan`: drag, spring-snap to the nearest card,
          tap the front one to pick it for Buy). `npm run test:saved` (emulators + Channel3 detail, 3 tests). **saveItem
          and savedOffer not deployed yet.**
+      7. Activity: watch buys carry `priceWas` (the watch's startPrice) on the purchase and every activity entry; the card
+         heading strikes the old price through with a pen line and the new price rises in, counting down from it
+         (`PriceDrop`). `node --test test/watchprice.mjs` (emulators, no charge: $59.99 → $42.99, needs_approval,
+         priceWas on purchase + activity). **Not deployed yet** (purchaseOffer, approvePurchase, checkWatches,
+         checkWatchesNow, sweepStuckPurchases, runMaintenance carry the purchase code).

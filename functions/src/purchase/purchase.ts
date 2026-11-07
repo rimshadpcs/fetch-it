@@ -60,6 +60,8 @@ export interface PurchaseDoc {
   /** "user" from the app, "watch" when a price watch hit its target. */
   source: "user" | "watch";
   watchId: string | null;
+  /** Watch buys: the price when the user started watching (Activity strikes it through next to the new one). */
+  priceWas?: number | null;
   decision: Decision;
   reasons: Reason[];
   productId: string;
@@ -121,6 +123,7 @@ function logActivity(tx: Transaction, uid: string, purchaseId: string, p: Partia
     retailerOrderStatus: p.retailerOrderStatus ?? RETAILER_ORDER_STATUS,
     source: p.source ?? "user",
     watchId: p.watchId ?? null,
+    priceWas: p.priceWas ?? null,
     price: p.price ?? null,
     currency: p.currency ?? null,
     imageUrl: p.imageUrl ?? null,
@@ -306,6 +309,8 @@ export async function startPurchase(
     size?: string | null;
     source: "user" | "watch";
     watchId?: string;
+    /** The price before it dropped (watch buys). */
+    priceWas?: number | null;
     /** Client-generated id for this one Buy tap; becomes the purchase id. A repeat returns the same purchase. */
     requestId?: string;
     onDecision?: (r: PurchaseResponse) => unknown;
@@ -367,6 +372,7 @@ export async function startPurchase(
       retailerOrderStatus: RETAILER_ORDER_STATUS,
       source: opts.source,
       watchId: opts.watchId ?? null,
+      priceWas: opts.priceWas ?? null,
       size,
       price: live.price,
       currency: live.currency,

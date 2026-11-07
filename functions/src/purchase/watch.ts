@@ -140,7 +140,7 @@ async function checkWatch(uid: string, ref: DocumentReference, w: WatchDoc): Pro
     `Price dropped to ${money(live.price, live.currency)} (your target ${money(w.targetPrice, w.currency)}). Checking your house rules.`,
     live.price,
   );
-  const purchase = await startPurchase(uid, w, { placeId: w.placeId, size: w.size, source: "watch", watchId: ref.id });
+  const purchase = await startPurchase(uid, w, { placeId: w.placeId, size: w.size, source: "watch", watchId: ref.id, priceWas: w.startPrice });
   await ref.update({ purchaseId: purchase.purchaseId, purchaseStatus: purchase.status, updatedAt: FieldValue.serverTimestamp() });
   return { ...result, triggered: true, purchase };
 }
