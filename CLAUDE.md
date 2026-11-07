@@ -652,6 +652,10 @@ reduce motion.
       `npm run test:watch` (emulators + Channel3 detail, 5 tests, nothing charged). watchOffer + stopWatch deployed
       Nov 7 (both answer); not seen on a device.
 - [~] Fetch header (Nov 7, after a scrapbook-app reference): "What should I fetch?" with two bare doodle icon buttons on
-      the right (red heart → Saved for later, filled once anything's saved; bell → Price watches), each with a small
-      black count badge; today's date under it ("7th" serif + "November"); then a pill row: "$X left this month"
+      the right (red heart → Saved for later, filled once anything's saved; price tags → Price watches), each with a small
+      count badge (watches: green when a watched price is below its start price, red when no drop yet); today's date under it ("7th" serif + "November"); then a pill row: "$X left this month"
       as the black pill (→ Rules) and the gray snaps pill, both 44 dp. Builds; not seen on a device.
+      Nov 7 follow-up: `Doodle.PriceTag` (not in the set: two stacked tags + "$", built on the set's tag.svg, after the
+      user's reference) replaces the bell for watches (header, watch pill, You row). Red/green dot on the watch pill and
+      on each live watch in Price watches (`Watch.dropped` = lastPrice < startPrice). Saved for later: the buy panel has
+      the watch pill too (same `WatchSheet`, the saved item's live offer + picked size).

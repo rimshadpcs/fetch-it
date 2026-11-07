@@ -146,7 +146,10 @@ fun FetchScreen(app: AppState) {
             Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 14.dp, top = 52.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("What should I fetch?", style = hand(30.sp), modifier = Modifier.weight(1f))
                 HeaderIcon(Doodle.Heart, "Saved for later", app.saved.size, Ink.Accent, filled = app.saved.isNotEmpty()) { app.go(Screen.Saved) }
-                HeaderIcon(Doodle.Bell, "Price watches", app.watches.count { it.watching }, Ink.Ink) { app.go(Screen.Watches) }
+                app.watches.filter { it.watching }.let { live ->
+                    // Green dot: something watched is cheaper than when watching started; red: no drop yet.
+                    HeaderIcon(Doodle.PriceTag, "Price watches", live.size, Ink.Ink, badge = if (live.any { it.dropped }) Ink.Drop else Ink.Accent) { app.go(Screen.Watches) }
+                }
             }
             TodayLine(Modifier.padding(start = 24.dp, top = 2.dp))
             Row(Modifier.horizontalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -220,14 +223,14 @@ fun FetchScreen(app: AppState) {
 
 /** A bare doodle icon button (like the reference's header icons) with a small black count badge. */
 @Composable
-private fun HeaderIcon(icon: Doodle, label: String, count: Int, color: Color, filled: Boolean = false, onClick: () -> Unit) {
+private fun HeaderIcon(icon: Doodle, label: String, count: Int, color: Color, filled: Boolean = false, badge: Color = Ink.Ink, onClick: () -> Unit) {
     Box(
         Modifier.size(46.dp).roundButton(onClick).semantics(mergeDescendants = true) { contentDescription = if (count > 0) "$label, $count" else label },
         contentAlignment = Alignment.Center,
     ) {
         DoodleIcon(icon, null, size = 27.dp, color = color, strokeWidth = 4.2f, filled = filled)
         if (count > 0) Box(
-            Modifier.align(Alignment.TopEnd).padding(top = 5.dp, end = 3.dp).size(18.dp).clip(CircleShape).background(Ink.Ink),
+            Modifier.align(Alignment.TopEnd).padding(top = 5.dp, end = 3.dp).size(18.dp).clip(CircleShape).background(badge),
             contentAlignment = Alignment.Center,
         ) { Text(if (count > 9) "9+" else "$count", style = body(10.sp, FontWeight.Bold, Ink.White)) }
     }

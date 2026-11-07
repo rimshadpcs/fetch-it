@@ -192,6 +192,8 @@ data class Watch(
     val purchaseStatus: String? = null,
 ) {
     val watching get() = status == "watching"
+    /** Lower now than when watching started. */
+    val dropped get() = lastPrice != null && startPrice != null && lastPrice < startPrice - 0.005
 }
 
 @Serializable

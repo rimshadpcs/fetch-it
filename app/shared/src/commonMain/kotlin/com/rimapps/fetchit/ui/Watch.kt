@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
@@ -60,11 +61,12 @@ fun WatchChip(watch: Watch?, onClick: () -> Unit, modifier: Modifier = Modifier)
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         val fg = if (watch != null) Ink.White else Ink.Ink
-        DoodleIcon(Doodle.Bell, null, size = 16.dp, color = fg, strokeWidth = 4.4f)
+        DoodleIcon(Doodle.PriceTag, null, size = 18.dp, color = fg, strokeWidth = 4.4f)
         Text(
             if (watch != null) "watching ≤ ${money(watch.targetPrice, watch.currency)}" else "watch price",
             style = body(14.sp, FontWeight.SemiBold, fg),
         )
+        if (watch != null) Box(Modifier.size(8.dp).clip(CircleShape).background(if (watch.dropped) Ink.Drop else Ink.Accent))
     }
 }
 
@@ -193,10 +195,12 @@ private fun WatchNote(w: Watch, tilt: Float, onStop: (() -> Unit)?) {
             Column(Modifier.weight(1f)) {
                 Text(w.title.lowercase(), style = hand(19.sp), maxLines = 2)
                 Text(w.merchant.removePrefix("www."), style = body(13.sp, FontWeight.SemiBold, Ink.Muted))
-                Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // Green: cheaper than when watching started; red: no drop yet.
+                    if (w.watching) Box(Modifier.size(9.dp).clip(CircleShape).background(if (w.dropped) Ink.Drop else Ink.Accent))
                     Text("≤ ${money(w.targetPrice, w.currency)}", style = serif(18.sp))
                     Text(
-                        if (w.watching) w.lastPrice?.let { "now ${money(it, w.currency)}" } ?: "not listed right now"
+                        if (w.watching) w.lastPrice?.let { "now ${money(it, w.currency)}" + if (w.dropped) " (was ${money(w.startPrice, w.currency)})" else "" } ?: "not listed right now"
                         else "dropped to ${money(w.lastPrice, w.currency)}" + (w.purchaseStatus?.let { " · ${it.replace('_', ' ')}" } ?: ""),
                         style = body(13.sp, FontWeight.SemiBold, if (w.watching) Ink.Muted else Ink.Accent),
                     )

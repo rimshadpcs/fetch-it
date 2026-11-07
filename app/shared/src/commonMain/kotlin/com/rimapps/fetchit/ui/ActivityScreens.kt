@@ -312,7 +312,7 @@ fun AccountScreen(app: AppState) {
                 }
                 SettingRow(Doodle.Camera, "Your snaps", if (app.snaps.isEmpty()) "photos you fetch, to search again" else "${app.snaps.size} on this phone · search again") { app.go(Screen.Snaps()) }
                 SettingRow(Doodle.Heart, "Saved for later", if (app.saved.isEmpty()) "tap the heart on a result" else "${app.saved.size} saved") { app.go(Screen.Saved) }
-                SettingRow(Doodle.Bell, "Price watches", app.watches.count { it.watching }.let { if (it == 0) "watch a result, I buy when it drops" else "$it watching · checked hourly" }) { app.go(Screen.Watches) }
+                SettingRow(Doodle.PriceTag, "Price watches", app.watches.count { it.watching }.let { if (it == 0) "watch a result, I buy when it drops" else "$it watching · checked hourly" }) { app.go(Screen.Watches) }
                 SettingRow(Doodle.MapPin, "Saved places", app.savedPlaces.joinToString(" · ") { it.label + if (it.isDefault) " (default)" else "" }.ifBlank { "none yet" }) { app.go(Screen.Places) }
                 SettingRow(Doodle.Ruler, "My sizes", listOfNotNull(app.sizes.top, app.sizes.waist?.let { "waist $it" }, app.sizes.shoe, app.sizes.fit?.lowercase()?.let { "$it fit" }).joinToString(" · ").ifBlank { "not set" }) { app.go(Screen.OnbSizes) }
                 SettingRow(Doodle.Dog, "${app.dogName}'s name", "rename your fetcher", onLongClick = { app.go(Screen.MotionLab) }) { app.go(Screen.Ready) }

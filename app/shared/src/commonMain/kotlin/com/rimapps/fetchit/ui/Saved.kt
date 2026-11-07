@@ -53,6 +53,8 @@ fun SavedScreen(app: AppState) {
     var open by remember { mutableStateOf<String?>(null) }
     var picking by remember { mutableStateOf(false) }
     var placeId by remember { mutableStateOf(app.defaultPlace?.placeId) }
+    // Watch price from a saved thing: the sheet takes the live offer (and size) its buy panel loaded.
+    var watching by remember { mutableStateOf<Pair<Offer, String?>?>(null) }
     LaunchedEffect(Unit) { runCatching { app.saved = app.api.saved() } }
     Box(Modifier.fillMaxSize().dotted()) {
         Column(Modifier.fillMaxSize().padding(top = 56.dp, bottom = 34.dp)) {
@@ -69,13 +71,14 @@ fun SavedScreen(app: AppState) {
                             app.toggleSavedById(s)
                         }
                         AnimatedVisibility(open == s.id, enter = expandVertically(tween(300)) + fadeIn(tween(250)), exit = shrinkVertically(tween(200)) + fadeOut(tween(150))) {
-                            BuyPanel(app, s, app.savedPlaces.firstOrNull { it.placeId == placeId } ?: app.defaultPlace) { picking = true }
+                            BuyPanel(app, s, app.savedPlaces.firstOrNull { it.placeId == placeId } ?: app.defaultPlace, onPickPlace = { picking = true }, onWatch = { o, z -> watching = o to z })
                         }
                     }
                 }
             }
         }
         PlacePickerSheet(app, picking, placeId, onPick = { placeId = it.placeId; picking = false }, onDismiss = { picking = false })
+        WatchSheet(app, watching != null, watching?.first, watching?.second, placeId, onDismiss = { watching = null })
     }
 }
 
@@ -97,7 +100,7 @@ private fun SavedNote(s: SavedItem, tilt: Float, onOpen: () -> Unit, onUnsave: (
 /** The saved thing at its live price (savedOffer), sizes if it has them, where it ships, and Buy. */
 @OptIn(ExperimentalLayoutApi::class, ExperimentalUuidApi::class)
 @Composable
-private fun BuyPanel(app: AppState, s: SavedItem, place: com.rimapps.fetchit.data.Place?, onPickPlace: () -> Unit) {
+private fun BuyPanel(app: AppState, s: SavedItem, place: com.rimapps.fetchit.data.Place?, onPickPlace: () -> Unit, onWatch: (Offer, String?) -> Unit) {
     var offer by remember { mutableStateOf<Offer?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var size by remember { mutableStateOf<String?>(null) }
@@ -124,10 +127,13 @@ private fun BuyPanel(app: AppState, s: SavedItem, place: com.rimapps.fetchit.dat
                         sizes.forEach { z -> Chip(z.label, z.label == size, onClick = { size = z.label }) }
                     }
                 }
-                Text(
-                    "ship to ${place?.label ?: "add a place"} ▾", style = body(14.sp, FontWeight.SemiBold, Ink.Muted),
-                    modifier = Modifier.clickable(onClick = onPickPlace).padding(vertical = 6.dp),
-                )
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "ship to ${place?.label ?: "add a place"} ▾", style = body(14.sp, FontWeight.SemiBold, Ink.Muted),
+                        modifier = Modifier.weight(1f).clickable(onClick = onPickPlace).padding(vertical = 6.dp),
+                    )
+                    WatchChip(app.watchFor(o), onClick = { onWatch(o, size) })
+                }
                 PillButton("Buy · ${money(o.price, o.currency)}", enabled = armed && place != null, onClick = {
                     app.go(Screen.Buying(o, size, Uuid.random().toHexString(), place!!.placeId))
                 })

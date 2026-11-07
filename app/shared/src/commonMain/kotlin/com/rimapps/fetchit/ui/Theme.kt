@@ -29,6 +29,8 @@ object Ink {
     val NoteBorder = Color(0xFFE4E4E1)
     val Accent = Color(0xFFE8402A)
     val Warning = Color(0xFFB4351E)
+    /** Price-watch dot: the price has dropped since watching started (red = not yet). */
+    val Drop = Color(0xFF2E9B5A)
     val Grey = Color(0xFF8A8A87)
     val LightGrey = Color(0xFFA3A3A0)
     val NavGrey = Color(0xFF7A7A77)
