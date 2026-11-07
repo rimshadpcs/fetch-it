@@ -37,7 +37,7 @@ import com.rimapps.fetchit.data.Offer
 import com.rimapps.fetchit.data.SavedItem
 import com.rimapps.fetchit.friendly
 import com.rimapps.fetchit.ui.components.Chip
-import com.rimapps.fetchit.ui.components.DashedSpinner
+import com.rimapps.fetchit.ui.motion.PawLoader
 import com.rimapps.fetchit.ui.components.PillButton
 import com.rimapps.fetchit.ui.motion.blurIn
 import kotlinx.coroutines.delay
@@ -114,7 +114,7 @@ private fun BuyPanel(app: AppState, s: SavedItem, place: com.rimapps.fetchit.dat
         when {
             error != null -> ErrorNote(error)
             o == null -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                DashedSpinner(Ink.Ink, Modifier.size(20.dp)); Text("Checking today's price…", style = body(14.sp, color = Ink.Muted))
+                PawLoader(Ink.Ink, Modifier.size(48.dp, 18.dp)); Text("Checking today's price…", style = body(14.sp, color = Ink.Muted))
             }
             o.availability == "OutOfStock" -> Text("Not available at ${o.merchant.removePrefix("www.")} right now.", style = hand(20.sp, Ink.Warning))
             else -> {

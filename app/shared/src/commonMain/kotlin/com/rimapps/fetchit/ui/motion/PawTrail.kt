@@ -35,3 +35,35 @@ private fun DrawScope.drawPaw(c: Offset, r: Float, color: Color) {
         drawCircle(color, r * 0.27f, Offset(c.x + dx * r, c.y + dy * r))
     }
 }
+
+/**
+ * Loading inside a button: four paw prints step in left to right (Scout walking), each popping in 0.6 → 1, holding,
+ * then fading; a 1.2 s loop. With reduce motion the prints sit still and gently fade in and out together.
+ */
+@Composable
+fun PawLoader(color: Color, modifier: Modifier = Modifier) {
+    val clock = rememberClock()
+    val reduce = LocalReduceMotion.current
+    Canvas(modifier) {
+        val prints = 4
+        val step = size.width / prints
+        val r = size.height * 0.26f
+        for (i in 0 until prints) {
+            val (alpha, scale) = if (reduce) {
+                (0.55f + 0.45f * kotlin.math.sin(clock.value / 1000f * 3f)) to 1f
+            } else {
+                // Phase of this print in the loop: 0 → appears at its turn (i × 0.2), visible until 0.85, gone by 1.
+                val p = ((clock.value % 1200) / 1200f - i * 0.17f)
+                when {
+                    p < 0f -> 0f to 0.6f
+                    p < 0.12f -> (p / 0.12f) to (0.6f + 0.4f * p / 0.12f)
+                    p < 0.55f -> 1f to 1f
+                    p < 0.75f -> (1f - (p - 0.55f) / 0.2f) to 1f
+                    else -> 0f to 1f
+                }
+            }
+            val y = size.height * if (i % 2 == 0) 0.62f else 0.38f
+            drawPaw(Offset(step * (i + 0.5f), y), r * scale, color.copy(alpha = alpha.coerceIn(0f, 1f)))
+        }
+    }
+}

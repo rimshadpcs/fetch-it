@@ -251,7 +251,9 @@ reduce motion.
 - `Modifier.pressScale(source, Press.PILL 0.96 | GRAY 0.95 | ROUND 0.90, tilt)`: 80 ms sink, spring back with
   overshoot; round buttons also turn ±6° once (`Modifier.roundButton`, `Modifier.grayPress`). Visual only, never
   delays a click. Buy keeps its own armed gesture and feeds presses into the same effect.
-- `PillButton(…, loading, done)`: shadow tightens on press + light haptic; loading = dashed spinner; done = pen ✓ in
+- `PillButton(…, loading, done)`: shadow tightens on press + light haptic; loading = `PawLoader` (four paw prints
+  step in left to right, 1.2 s loop; still + fading under reduce motion; replaced the dashed spinner Nov 7, every button
+  incl. onboarding); done = pen ✓ in
   300 ms + success haptic, caller moves on ~350 ms later (`DONE_PAUSE_MS`); disabled→enabled fades 0.4→1 with an
   arming bounce.
 - `Segmented` (sliding white pill, color crossfade, tick haptic) · `Chip(check = true)` for multi-select (pop 1.08→1 +

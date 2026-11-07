@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rimapps.fetchit.ui.Ink
 import com.rimapps.fetchit.ui.body
+import com.rimapps.fetchit.ui.motion.PawLoader
 import com.rimapps.fetchit.ui.motion.LocalReduceMotion
 import com.rimapps.fetchit.ui.motion.PathDraw
 import com.rimapps.fetchit.ui.motion.inkStroke
@@ -102,7 +103,7 @@ fun PillButton(
         val state = when { done -> 2; loading -> 1; else -> 0 }
         AnimatedContent(state, transitionSpec = { fadeIn(tween(150)) togetherWith fadeOut(tween(100)) }, label = "pill") { s ->
             when (s) {
-                1 -> DashedSpinner(fg, Modifier.size(24.dp))
+                1 -> PawLoader(fg, Modifier.size(64.dp, 22.dp))
                 2 -> CheckMark(fg, Modifier.size(26.dp))
                 else -> Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                     leading?.invoke()
