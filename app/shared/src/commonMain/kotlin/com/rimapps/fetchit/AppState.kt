@@ -114,6 +114,9 @@ fun Offer.snapKey() = "$productId|$merchant"
 
 /** One photo's journey: identify → (Which one?) → offers. */
 /** [snapId]: the Snap this photo is saved as. [before]: the last search's offers when this is a search-again. */
+/** A shared link being turned into a photo ([error] once it failed). */
+data class SharedLink(val from: String, val error: String? = null)
+
 class FetchSession(val photo: ByteArray, val snapId: String? = null, val before: List<SnapOffer>? = null, val beforeAt: Long? = null) {
     var identified by mutableStateOf<List<DetectedItem>>(emptyList())
     /** The first answer: "results" for one item, or "choose" (several items + the signed itemsToken). */
@@ -385,9 +388,34 @@ class AppState(val scope: CoroutineScope, val api: FetchApi = FetchApi()) {
     /** A photo shared from another app: fetch it now if the user is set up, else it waits for onboarding to finish. */
     fun takeSharedPhoto() {
         if (!onboarded || !api.firebase.signedIn) return
-        val photo = com.rimapps.fetchit.platform.SharedPhotos.pending.value ?: return
-        com.rimapps.fetchit.platform.SharedPhotos.pending.value = null
+        val shared = com.rimapps.fetchit.platform.SharedPhotos
+        shared.pendingLink.value?.let { text ->
+            shared.pendingLink.value = null
+            fetchLink(text)
+        }
+        val photo = shared.pending.value ?: return
+        shared.pending.value = null
         startFetch(photo)
+    }
+
+    /** A link shared from Pinterest / a store page: "Getting the photo from Pinterest…", then the normal fetch. */
+    var sharedLink by mutableStateOf<SharedLink?>(null)
+
+    private fun fetchLink(text: String) {
+        val from = when {
+            "pin.it" in text || "pinterest." in text -> "Pinterest"
+            "instagram.com" in text || "instagr.am" in text -> "Instagram"
+            else -> "that page"
+        }
+        val link = SharedLink(from)
+        sharedLink = link
+        session = null
+        reset(Screen.Fetch)
+        scope.launch {
+            runCatching { ensureSignedIn(); api.linkPhoto(text) }
+                .onSuccess { (photo, _) -> if (sharedLink === link) { sharedLink = null; startFetch(photo) } }
+                .onFailure { if (sharedLink === link) sharedLink = link.copy(error = it.friendly()) }
+        }
     }
 
     fun startFetch(photo: ByteArray, again: Snap? = null) {

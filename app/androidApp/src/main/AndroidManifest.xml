@@ -31,11 +31,12 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Share to Fetch It: an image from any app's share sheet starts a fetch. -->
+            <!-- Share to Fetch It: an image, or a link (Pinterest, a store page), from any app's share sheet starts a fetch. -->
             <intent-filter android:label="@string/share_label">
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="image/*" />
+                <data android:mimeType="text/plain" />
             </intent-filter>
             <!-- PayPal approval returns here: fetchit://paypal/return?… and fetchit://paypal/cancel -->
             <intent-filter>

@@ -26,6 +26,8 @@ object DeepLinks {
  */
 object SharedPhotos {
     val pending = kotlinx.coroutines.flow.MutableStateFlow<ByteArray?>(null)
+    /** Shared text with a link in it (Pinterest, Instagram, a store page): the backend finds the photo. */
+    val pendingLink = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
 }
 
 /** Ways to get a photo in, already downscaled to a JPEG (longest side ≤ 1024 px) for fetchItem. */

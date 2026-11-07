@@ -213,6 +213,9 @@ data class WatchHistory(
 )
 
 @Serializable
+data class LinkPhoto(val imageBase64: String = "", val source: String = "")
+
+@Serializable
 data class WatchStarted(val watchId: String = "", val currentPrice: Double? = null, val targetPrice: Double = 0.0, val currency: String = "USD")
 
 @Serializable

@@ -55,7 +55,15 @@ class MainActivity : FragmentActivity() {
 
     // "Share to Fetch It": an image from another app's share sheet (a screenshot, a gallery photo, a saved post).
     private fun handleShare(intent: Intent?) {
-        if (intent?.action != Intent.ACTION_SEND || intent.type?.startsWith("image/") != true) return
+        if (intent?.action != Intent.ACTION_SEND) return
+        // Pinterest, Instagram and browsers share a link (text), not the photo: the backend finds the photo.
+        if (intent.type == "text/plain") {
+            val text = intent.getStringExtra(Intent.EXTRA_TEXT) ?: return
+            intent.action = null
+            SharedPhotos.pendingLink.value = text.take(4000)
+            return
+        }
+        if (intent.type?.startsWith("image/") != true) return
         val uri = IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java) ?: return
         intent.action = null // handled once, not again on recreation
         lifecycleScope.launch {

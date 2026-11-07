@@ -86,6 +86,7 @@ KMP app ──Firebase Auth──▶ Cloud Functions (TypeScript)
 | `stopWatch` ✅ | `{watchId}`: a watching watch → `stopped` + activity; anything else refused |
 | `checkWatches` ✅ | scheduled hourly: live price ≤ target → "Price dropped" activity → same purchase path (rules apply); a new low still above target → push only (`notifiedPrice`, tap → Price watches) |
 | `checkWatchesNow` ✅ | callable "check now" for the caller's own watches (how the emulator test runs a check) |
+| `linkPhoto` ✅ | `{text}` shared text with a link → `{imageBase64, source}`: Pinterest via its public oEmbed (736 px), other pages via their og:image (honest UA), Instagram refused with "screenshot it"; public hosts only, every redirect re-checked; 30/h |
 | `findSimilar` ✅ | `{offerId, maxPrice?}`: "More like this" / "Find cheaper" via Channel3 `/v1/similar`, signed offers |
 | `setRules` | update house rules (reads come straight from Firestore) |
 | `registerPushToken` ✅ | `{token, platform}` → `users/{uid}/devices/{sha256(token)[:32]}`; dead tokens are removed when FCM rejects them |
@@ -681,4 +682,14 @@ reduce motion.
       bought. `dropToNotify` (lib/pricehistory.ts, unit test, 48 total): only a price under `notifiedPrice ?? startPrice`, so a
       bounce back to an old low doesn't re-push; `notifiedPrice` survives re-targeting. Push data `{open: "watch", watchId}`,
       Android tag `watch-<id>` (a newer drop replaces the older one), tap → Price watches. `npm run test:watch` (6 tests).
+      Not deployed; not seen on a device.
+- [~] Share links (Nov 8): Pinterest / Instagram / browsers share a link (text/plain), not the photo. Manifest takes text/plain;
+      MainActivity → `SharedPhotos.pendingLink` → `linkPhoto` → normal fetch, with "Getting the photo from Pinterest…" (paw loader)
+      on Fetch, or the reason it failed. Pinterest: `GET pinterest.com/oembed.json?url=…/pin/<id>/` → `thumbnail_url` (236x;
+      `/736x/` is the same pin bigger); pin.it short links are followed first. Instagram has no public way to the photo (oEmbed
+      needs a Meta-reviewed app; pretending to be a link-preview bot isn't something we do) → "Screenshot the post and share
+      that instead." SSRF guard: DNS-resolved addresses must be public (no loopback / private / 169.254 / CGNAT), ports 80/443
+      only, manual redirects (≤ 5, each re-checked), 3 MB page / 10 MB image caps, 8 s timeouts. Known gap: DNS rebinding
+      between the check and the fetch. Tests: `npm test` (+3, 51 total), `test/linkphoto.mjs` (emulators: the user's pin →
+      99 KB JPEG in 4.5 s, wayfair.com → its preview image, Instagram hint, 169.254.169.254 / localhost refused).
       Not deployed; not seen on a device.

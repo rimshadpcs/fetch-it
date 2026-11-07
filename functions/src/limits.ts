@@ -22,6 +22,7 @@ export const RATE_LIMITS = {
   fetchItem: { hour: 30, day: 200 },
   findSimilar: { hour: 30 },
   purchaseOffer: { hour: 20 },
+  linkPhoto: { hour: 30 },
 } satisfies Record<string, { hour?: number; day?: number }>;
 export type LimitedAction = keyof typeof RATE_LIMITS;
 

@@ -4,6 +4,8 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.StrokeCap
 import kotlinx.datetime.toLocalDateTime
 import com.rimapps.fetchit.ui.motion.riseIn
+import com.rimapps.fetchit.ui.motion.PawLoader
+import com.rimapps.fetchit.SharedLink
 import com.rimapps.fetchit.ui.motion.popIn
 import com.rimapps.fetchit.snapKey
 import androidx.compose.ui.text.style.TextDecoration
@@ -190,6 +192,7 @@ fun FetchScreen(app: AppState) {
                 // Scout peeks over the top of the card on both Snap and Upload (big Scout from onboarding shrinks into
                 // this), and stays put when you switch between them.
                 Column(Modifier.weight(1f).padding(start = 22.dp, end = 22.dp, top = 6.dp, bottom = 22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    app.sharedLink?.let { SharedLinkNote(app, it) }
                     ScoutPeek(96.dp, Modifier.sharedShape(SCOUT_KEY), showing = 0.6f)
                     if (mode == "Snap") {
                         Box(
@@ -696,4 +699,20 @@ fun shortDate(millis: Long): String {
     val d = kotlin.time.Instant.fromEpochMilliseconds(millis).toLocalDateTime(tz).date
     val today = kotlin.time.Clock.System.now().toLocalDateTime(tz).date
     return if (d == today) "earlier today" else "${d.month.name.take(3).lowercase().replaceFirstChar { it.uppercase() }} ${d.day}"
+}
+
+/** A link shared from Pinterest / a store page while the backend finds its photo, or why it couldn't. */
+@Composable
+private fun SharedLinkNote(app: AppState, link: SharedLink) {
+    PaperNote(Modifier.fillMaxWidth().padding(bottom = 10.dp).riseIn(), tilt = 0.8f) {
+        if (link.error == null) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Getting the photo from ${link.from}…", style = hand(22.sp), modifier = Modifier.weight(1f))
+                PawLoader(Ink.Ink, Modifier.size(48.dp, 18.dp))
+            }
+        } else {
+            Text(link.error, style = body(15.sp, FontWeight.Medium, Ink.Warning))
+            Text("ok", style = body(14.sp, FontWeight.SemiBold, Ink.Muted), modifier = Modifier.clickable { app.sharedLink = null }.padding(top = 2.dp))
+        }
+    }
 }

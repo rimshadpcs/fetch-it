@@ -44,6 +44,9 @@ class FetchApi(val firebase: Firebase = Firebase(httpClient())) {
             put("offerId", offerId); put("targetPrice", targetPrice)
             size?.let { put("size", it) }; placeId?.let { put("placeId", it) }
         }).to()
+    /** A shared link (Pinterest pin, store page) → the photo it points at, ready for [fetchItem]. */
+    suspend fun linkPhoto(text: String): Pair<ByteArray, String> =
+        firebase.call("linkPhoto", buildJsonObject { put("text", text) }).to<LinkPhoto>().let { Base64.decode(it.imageBase64) to it.source }
     suspend fun stopWatch(watchId: String) { firebase.call("stopWatch", buildJsonObject { put("watchId", watchId) }) }
     suspend fun setRules(rules: HouseRules): HouseRules = firebase.call("setRules", json.encodeToJsonElement(rules)).to()
 

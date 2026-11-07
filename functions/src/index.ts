@@ -9,6 +9,7 @@ export { fetchItem } from "./fetch/fetchItem.js";
 export { purchaseOffer, approvePurchase, undoPurchase } from "./purchase/purchase.js";
 export { watchOffer, stopWatch, checkWatches, checkWatchesNow } from "./purchase/watch.js";
 export { findSimilar } from "./fetch/findSimilar.js";
+export { linkPhoto } from "./fetch/linkPhoto.js";
 export { advanceOrders, advanceOrder, cancelOrder } from "./fulfillment.js";
 export { startPayPalLink, completePayPalLink, confirmPlace } from "./paypalLink.js";
 export { sweepStuckPurchases, runMaintenance } from "./purchase/cleanup.js";

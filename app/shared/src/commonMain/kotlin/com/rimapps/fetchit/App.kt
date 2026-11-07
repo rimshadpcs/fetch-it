@@ -87,6 +87,9 @@ fun App(register: ((() -> Boolean) -> Unit)? = null) {
     LaunchedEffect(Unit) {
         com.rimapps.fetchit.platform.SharedPhotos.pending.collect { photo -> if (photo != null) app.takeSharedPhoto() }
     }
+    LaunchedEffect(Unit) {
+        com.rimapps.fetchit.platform.SharedPhotos.pendingLink.collect { text -> if (text != null) app.takeSharedPhoto() }
+    }
     val reduceMotion = systemReduceMotion()
     val photos = rememberPhotoSource { app.startFetch(it) }
     val shake = remember { ScreenShake() }
