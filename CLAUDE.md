@@ -675,4 +675,4 @@ reduce motion.
       lowest|wait|steady, message}` + `historyAt`, written by watchOffer and by checks at most every 12 h. App: under
       each live watch a pen sparkline (draws on in 600 ms), dashed target line, dot coloured by verdict, high/low, and
       Scout's line ("It was $41.99 on Oct 31. I'd wait for a drop."). `npm run test:watch` checks it on the real lamp.
-      **Not deployed yet** (watchOffer, checkWatches, checkWatchesNow).
+      Deployed Nov 7 (watchOffer, checkWatches, checkWatchesNow); existing watches fill in at their next hourly check.
