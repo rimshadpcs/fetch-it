@@ -649,5 +649,5 @@ reduce motion.
       over today's price is refused, over the per-item limit warns it'll still ask), uses the picked size + ship-to
       place; Change target / Stop watching when already watched. Buy disarms while the sheet is open. You → Price
       watches (`WatchesScreen`): live watches with target, last price, stop; recent "price dropped" ones below.
-      `npm run test:watch` (emulators + Channel3 detail, 5 tests, nothing charged). **watchOffer change + stopWatch
-      not deployed yet**; not seen on a device.
+      `npm run test:watch` (emulators + Channel3 detail, 5 tests, nothing charged). watchOffer + stopWatch deployed
+      Nov 7 (both answer); not seen on a device.
