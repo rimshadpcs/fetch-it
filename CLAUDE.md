@@ -607,3 +607,10 @@ inactive. No Material icons. Adding one: copy its `<path d>` values from `npm pa
          (`PriceDrop`). `node --test test/watchprice.mjs` (emulators, no charge: $59.99 → $42.99, needs_approval,
          priceWas on purchase + activity). **Not deployed yet** (purchaseOffer, approvePurchase, checkWatches,
          checkWatchesNow, sweepStuckPurchases, runMaintenance carry the purchase code).
+      1b. (Nov 7, after feedback: the cropped mascot face under the button looked bad.) Redrawn after the user's reference
+         clips: `ScoutHero` (motion/ScoutHero.kt) is Scout simplified to a bold domed head on a 400×260 box: white dome with
+         ink outline, black floppy ears hanging off the screen edges, big outlined eyes with pupils + highlight (patch
+         behind the right one), nose, smile, red tongue. Welcome: it fills the bottom edge to edge, rises in, eyes glance
+         and blink, then look down at "Get started", which sits on his head; ears sway slightly. `ScoutPeek` now draws the
+         same head showing only dome + ears + eyes (onboarding steps, viewfinder, Results). `ScoutFace` (old style) is only
+         in the Motion lab now.

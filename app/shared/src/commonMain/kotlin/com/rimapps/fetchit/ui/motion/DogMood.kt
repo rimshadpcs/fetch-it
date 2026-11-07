@@ -235,25 +235,6 @@ fun ScoutFace(width: Dp, modifier: Modifier = Modifier, lookAt: Offset? = null, 
     }
 }
 
-/**
- * Scout's face rising over an edge: only the top [showing] of it is visible, as if he's behind the thing
- * below him. It rises into place over 350 ms after [delayMs] (a fade with reduce motion).
- */
-@Composable
-fun ScoutPeek(width: Dp, modifier: Modifier = Modifier, showing: Float = 0.62f, lookAt: Offset? = null, glance: Boolean = true, delayMs: Int = 0) {
-    val reduce = LocalReduceMotion.current
-    val rise = rememberProgress(Unit, if (reduce) 200 else 350, delayMs, fadeOnly = true)
-    val faceHeight = width * (52f / 78f)
-    Box(modifier.size(width, faceHeight * showing).clipToBounds()) {
-        ScoutFace(
-            width, Modifier.graphicsLayer {
-                if (reduce) alpha = rise.value else translationY = (1f - rise.value) * faceHeight.toPx() * showing
-            },
-            lookAt = lookAt, glance = glance,
-        )
-    }
-}
-
 /** A leg from the hip line; `lift` 0 = planted, 1 = kicked back. Drawn over the body like the standing legs. */
 private fun DrawScope.runLeg(x: Float, lift: Float, line: Stroke) {
     val paw = Offset(x + 2f - 10f * lift, 112f - 8f * lift)

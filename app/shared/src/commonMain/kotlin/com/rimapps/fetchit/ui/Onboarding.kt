@@ -1,5 +1,6 @@
 package com.rimapps.fetchit.ui
 
+import com.rimapps.fetchit.ui.motion.ScoutHero
 import com.rimapps.fetchit.ui.components.grayPress
 import com.rimapps.fetchit.ui.components.WarningNote
 import com.rimapps.fetchit.ui.components.DrumPicker
@@ -118,33 +119,31 @@ fun WelcomeScreen(app: AppState) {
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    // Scout peeks up from the bottom edge, glances around, then looks up at the button.
-    var lookUp by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { delay(2600); lookUp = true }
-    Box(Modifier.fillMaxSize().dotted()) {
-    ScoutPeek(230.dp, Modifier.align(Alignment.BottomCenter), showing = 0.5f, lookAt = if (lookUp) Offset(0.15f, -1f) else null, delayMs = 500)
-    Column(Modifier.fillMaxSize().padding(bottom = 92.dp)) {
-        Text("Fetch It", style = body(22.sp, color = Ink.LightGrey), modifier = Modifier.align(Alignment.End).padding(top = 58.dp, end = 26.dp))
-        Box(Modifier.fillMaxWidth().height(340.dp)) {
-            Box(Modifier.offset(36.dp, 30.dp).pinIn(0, tilt = 0f)) {
-                Polaroid(null, "mushroom lamp", Modifier.width(190.dp), tilt = -6f, imageHeight = 150.dp, image = Res.drawable.welcome_lamp)
-                Tape(Modifier.align(Alignment.TopCenter).offset(y = (-6).dp), rotation = -10f, delayMs = 380)
+    // Scout's big head fills the bottom of the screen; his eyes glance around, then settle on the button on his head.
+    var lookDown by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { delay(2600); lookDown = true }
+    Column(Modifier.fillMaxSize().dotted()) {
+        Text("Fetch It", style = body(20.sp, color = Ink.LightGrey), modifier = Modifier.align(Alignment.End).padding(top = 50.dp, end = 24.dp))
+        Box(Modifier.fillMaxWidth().height(250.dp)) {
+            Box(Modifier.offset(30.dp, 14.dp).pinIn(0, tilt = 0f)) {
+                Polaroid(null, "mushroom lamp", Modifier.width(152.dp), tilt = -6f, imageHeight = 112.dp, image = Res.drawable.welcome_lamp)
+                Tape(Modifier.align(Alignment.TopCenter).offset(y = (-6).dp), width = 70.dp, rotation = -10f, delayMs = 380)
             }
-            Box(Modifier.align(Alignment.TopEnd).offset((-30).dp, 120.dp).pinIn(2, tilt = 0f)) {
-                Polaroid(null, "striped polo", Modifier.width(170.dp), tilt = 5f, imageHeight = 130.dp, image = Res.drawable.welcome_polo)
-                Tape(Modifier.align(Alignment.TopCenter).offset(y = (-4).dp), rotation = 8f, delayMs = 520)
+            Box(Modifier.align(Alignment.TopEnd).offset((-24).dp, 70.dp).pinIn(2, tilt = 0f)) {
+                Polaroid(null, "striped polo", Modifier.width(140.dp), tilt = 5f, imageHeight = 104.dp, image = Res.drawable.welcome_polo)
+                Tape(Modifier.align(Alignment.TopCenter).offset(y = (-4).dp), width = 66.dp, rotation = 8f, delayMs = 520)
             }
             // A pen arrow from the lamp polaroid down to where it was spotted.
             val d = LocalDensity.current
             PathDraw(Modifier.matchParentSize(), strokeWidth = 2.dp, durationMs = 380, delayMs = 900) {
-                with(d) { doodleArrow(Offset(92.dp.toPx(), 262.dp.toPx()), Offset(58.dp.toPx(), 300.dp.toPx()), bend = -0.35f, head = 8.dp.toPx()) }
+                with(d) { doodleArrow(Offset(84.dp.toPx(), 196.dp.toPx()), Offset(52.dp.toPx(), 222.dp.toPx()), bend = -0.35f, head = 8.dp.toPx()) }
             }
-            Text("spotted at a café", style = hand(21.sp, Ink.Muted), modifier = Modifier.align(Alignment.BottomStart).offset(24.dp, (-2).dp).rotate(-3f).riseIn(1150, distance = 6.dp))
+            Text("spotted at a café", style = hand(20.sp, Ink.Muted), modifier = Modifier.align(Alignment.BottomStart).offset(20.dp, 0.dp).rotate(-3f).riseIn(1150, distance = 6.dp))
         }
         // The headline on two strips of paper tape, slapped on one after the other.
-        val big = body(40.sp, FontWeight.Medium).copy(letterSpacing = (-1.4).sp)
-        val accent = big.copy(fontFamily = Fonts.serif, fontStyle = FontStyle.Italic, fontWeight = FontWeight.Normal, fontSize = 46.sp)
-        Column(Modifier.padding(horizontal = 18.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        val big = body(36.sp, FontWeight.Medium).copy(letterSpacing = (-1.2).sp)
+        val accent = big.copy(fontFamily = Fonts.serif, fontStyle = FontStyle.Italic, fontWeight = FontWeight.Normal, fontSize = 42.sp)
+        Column(Modifier.padding(horizontal = 18.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             TapeStrip(rotation = -2.5f, delayMs = 450) { Text("You spot it.", style = big) }
             TapeStrip(Modifier.padding(start = 34.dp), rotation = 1.8f, delayMs = 750) {
                 Row(verticalAlignment = Alignment.Bottom) {
@@ -156,20 +155,21 @@ fun WelcomeScreen(app: AppState) {
         }
         Text(
             "Snap it, and your agent finds it, checks your rules, and pays with PayPal.",
-            style = body(16.sp, color = Ink.NavGrey), modifier = Modifier.padding(horizontal = 26.dp).riseIn(900),
+            style = body(15.sp, color = Ink.NavGrey), modifier = Modifier.padding(horizontal = 24.dp, vertical = 6.dp).riseIn(900),
         )
+        ErrorNote(error, Modifier.padding(horizontal = 26.dp))
         Spacer()
-        ErrorNote(error, Modifier.padding(horizontal = 26.dp, vertical = 8.dp))
-        PillButton("Get started", loading = busy, modifier = Modifier.padding(horizontal = 20.dp).riseIn(1000, distance = 40.dp), onClick = {
-            busy = true; error = null
-            scope.launch {
-                runCatching { app.ensureSignedIn() }
-                    .onSuccess { app.go(Screen.LinkPayPal) }
-                    .onFailure { error = it.friendly() }
-                busy = false
-            }
-        })
-    }
+        ScoutHero(lookAt = if (lookDown) Offset(0f, 1f) else null, delayMs = 350) {
+            PillButton("Get started", loading = busy, modifier = Modifier.align(Alignment.BottomCenter).padding(start = 28.dp, end = 28.dp, bottom = 30.dp), onClick = {
+                busy = true; error = null
+                scope.launch {
+                    runCatching { app.ensureSignedIn() }
+                        .onSuccess { app.go(Screen.LinkPayPal) }
+                        .onFailure { error = it.friendly() }
+                    busy = false
+                }
+            })
+        }
     }
 }
 
