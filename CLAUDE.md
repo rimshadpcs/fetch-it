@@ -622,3 +622,9 @@ inactive. No Material icons. Adding one: copy its `<path d>` values from `npm pa
       Scout at 92 dp wagging, and on Meet your fetcher); Wag is livelier (±15°, 0.5 s); Which one? circles each item
       with a drawn-on pen loop (`wobblyLoop` sized ~1.28 × 1.24 the box + 10 dp, kept inside the photo) instead of
       dashed boxes.
+      Which one? is multi-select (Nov 7): nothing picked to start; rows fill black with a drawn ✓, a picked item's loop
+      turns red, and "Fetch it" / "Fetch these N" (dim until something is picked) runs `AppState.chooseItems`: one
+      fetchItem per picked item, in parallel, reusing the signed itemsToken. Results opens on the first item that found
+      something, with a tab per searched item (`FetchSession.results` / `current`; items with nothing show "none
+      found"); each tab's view is keyed so its sort, pick and "More matches" start fresh. The "choose" response is kept
+      in `FetchSession.response` (no longer overwritten).

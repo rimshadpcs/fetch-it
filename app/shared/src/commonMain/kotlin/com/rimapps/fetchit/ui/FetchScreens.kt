@@ -1,5 +1,15 @@
 package com.rimapps.fetchit.ui
 
+import com.rimapps.fetchit.data.FetchResponse
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.runtime.key
+import com.rimapps.fetchit.ui.motion.LocalReduceMotion
+import com.rimapps.fetchit.ui.components.CheckMark
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.ui.platform.LocalDensity
 import com.rimapps.fetchit.ui.motion.wobblyLoop
 import com.rimapps.fetchit.friendly
@@ -270,7 +280,7 @@ fun WhichOneScreen(app: AppState) {
             BackButton({ app.back() })
             Text("Which one?", style = hand(30.sp))
         }
-        Text("I spotted a few things. Tap the one you want.", style = body(16.sp, color = Ink.Muted), modifier = Modifier.padding(start = 70.dp, top = 4.dp, end = 20.dp))
+        Text("I spotted a few things. Pick the ones you want.", style = body(16.sp, color = Ink.Muted), modifier = Modifier.padding(start = 70.dp, top = 4.dp, end = 20.dp))
         BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).padding(20.dp), contentAlignment = Alignment.Center) {
             // Photo with the item boxes drawn on top; tapping a box picks it.
             Box(Modifier.fillMaxSize().sharedPhoto(PHOTO_KEY).background(Color(0xFF3E3C38))) {
@@ -280,7 +290,7 @@ fun WhichOneScreen(app: AppState) {
                 val pad = with(LocalDensity.current) { 10.dp.toPx() }
                 items.forEachIndexed { i, item ->
                     val b = item.box ?: return@forEachIndexed
-                    PathDraw(Modifier.matchParentSize(), color = if (i == 0) Ink.Accent else Color.White, strokeWidth = 3.5.dp, durationMs = 450, delayMs = 300 + 140 * i, key = item) { size ->
+                    PathDraw(Modifier.matchParentSize(), color = if (i in s.picked) Ink.Accent else Color.White, strokeWidth = 3.5.dp, durationMs = 450, delayMs = 300 + 140 * i, key = item) { size ->
                         val box = Rect(Offset(b.x.toFloat() * size.width, b.y.toFloat() * size.height), Size(b.width.toFloat() * size.width, b.height.toFloat() * size.height))
                         // An ellipse through a box's corners is √2 × the box; a bit less still clears it with the wobble.
                         val w = box.width * 1.28f + pad; val h = box.height * 1.24f + pad
@@ -294,20 +304,43 @@ fun WhichOneScreen(app: AppState) {
         }
         Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items.forEachIndexed { i, item ->
-                Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(999.dp)).background(if (i == 0) Ink.Ink else Ink.Pill)
-                        .clickable(enabled = !s.loading) { app.chooseItem(i) }.padding(horizontal = 22.dp, vertical = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(item.item_type.ifBlank { item.search_query }, style = hand(22.sp, if (i == 0) Ink.White else Ink.Ink), modifier = Modifier.weight(1f))
-                    item.colors.firstOrNull()?.let { Text(it, style = serif(16.sp, if (i == 0) Ink.LightGrey else Ink.Muted)) }
+                ItemPickRow(item.item_type.ifBlank { item.search_query }, item.colors.firstOrNull(), i in s.picked, enabled = !s.loading) {
+                    s.picked = if (i in s.picked) s.picked - i else s.picked + i
                 }
             }
             if (s.loading) Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 RunningDog(48.dp)
-                Text("Checking stores…", style = body(14.sp, FontWeight.SemiBold))
+                Text(if (s.picked.size > 1) "Checking stores for ${s.picked.size} things…" else "Checking stores…", style = body(14.sp, FontWeight.SemiBold))
             }
             ErrorNote(s.error)
+        }
+        // Nothing is picked to start; the button lights up once something is.
+        val n = s.picked.size
+        PillButton(
+            when (n) { 0 -> "Pick what to fetch"; 1 -> "Fetch it"; else -> "Fetch these $n" },
+            enabled = n > 0, loading = s.loading,
+            modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp),
+            onClick = { app.chooseItems(items.indices.filter { it in s.picked }) },
+        )
+    }
+}
+
+/** A detected item to tick: picking fills it black from the left and draws a ✓ (multi-select). */
+@Composable
+private fun ItemPickRow(label: String, color: String?, on: Boolean, enabled: Boolean, onClick: () -> Unit) {
+    val reduce = LocalReduceMotion.current
+    val fill by animateFloatAsState(if (on) 1f else 0f, tween(if (reduce) 120 else 260), label = "pickFill")
+    val fg by animateColorAsState(if (on) Ink.White else Ink.Ink, tween(200), label = "pickFg")
+    Box(
+        Modifier.fillMaxWidth().height(58.dp).clip(RoundedCornerShape(999.dp)).background(Ink.Pill)
+            .clickable(enabled = enabled, role = Role.Checkbox, onClick = onClick)
+            .semantics { stateDescription = if (on) "picked" else "not picked" },
+    ) {
+        Box(Modifier.fillMaxHeight().fillMaxWidth(fill).background(Ink.Ink))
+        Row(Modifier.fillMaxSize().padding(horizontal = 22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (on) CheckMark(Ink.White, Modifier.size(20.dp), durationMs = 240, delayMs = 100, strokeWidth = 2.6.dp)
+            Text(label, style = hand(22.sp, fg), modifier = Modifier.weight(1f))
+            color?.let { Text(it, style = serif(16.sp, if (on) Ink.LightGrey else Ink.Muted)) }
         }
     }
 }
@@ -315,7 +348,15 @@ fun WhichOneScreen(app: AppState) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ResultsScreen(app: AppState) {
-    val r = app.session?.response ?: return
+    val s = app.session ?: return
+    // One view per searched item; switching tabs starts that item's view fresh (sort, pick, more matches).
+    val shown = s.shown ?: return
+    key(s.current) { ResultsFor(app, s, shown) }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ResultsFor(app: AppState, s: FetchSession, r: FetchResponse) {
     val limit = app.rules?.perItemLimit
     var sort by remember { mutableStateOf("Best") }
     var underLimit by remember { mutableStateOf(false) }
@@ -379,6 +420,17 @@ fun ResultsScreen(app: AppState) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         DoodleIcon(Doodle.Check, null, size = 14.dp, strokeWidth = 5f)
                         Text("prices checked", style = body(12.sp, FontWeight.SemiBold))
+                    }
+                }
+            }
+            // Several things searched: a tab for each.
+            if (s.results.size + s.resultErrors.size > 1) {
+                val names = s.response?.items.orEmpty()
+                Row(Modifier.horizontalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    (s.results.keys + s.resultErrors.keys).sorted().forEach { i ->
+                        val label = names.getOrNull(i)?.let { it.item_type.ifBlank { it.search_query } } ?: "item ${i + 1}"
+                        if (i in s.results) Chip(label, s.current == i, onClick = { s.current = i })
+                        else Chip("$label · none found", false, onClick = {})
                     }
                 }
             }

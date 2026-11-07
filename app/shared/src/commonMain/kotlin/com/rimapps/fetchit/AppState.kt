@@ -24,6 +24,7 @@ import com.rimapps.fetchit.platform.pushToken
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 
 sealed interface Screen {
@@ -82,9 +83,19 @@ data class Sizes(val top: String? = null, val waist: String? = null, val shoe: S
 /** One photo's journey: identify → (Which one?) → offers. */
 class FetchSession(val photo: ByteArray) {
     var identified by mutableStateOf<List<DetectedItem>>(emptyList())
+    /** The first answer: "results" for one item, or "choose" (several items + the signed itemsToken). */
     var response by mutableStateOf<FetchResponse?>(null)
     var error by mutableStateOf<String?>(null)
     var loading by mutableStateOf(true)
+    /** After "Which one?": each picked item's results (by item index), any that failed, and the one on show. */
+    var results by mutableStateOf<Map<Int, FetchResponse>>(emptyMap())
+    var resultErrors by mutableStateOf<Map<Int, String>>(emptyMap())
+    var current by mutableStateOf<Int?>(null)
+    /** Items ticked on "Which one?" (none to start). */
+    var picked by mutableStateOf<Set<Int>>(emptySet())
+
+    /** What Results shows: the current picked item's offers, or the single-item answer. */
+    val shown: FetchResponse? get() = current?.let { results[it] } ?: response?.takeIf { it.status == "results" }
 }
 
 class AppState(val scope: CoroutineScope, val api: FetchApi = FetchApi()) {
@@ -280,22 +291,34 @@ class AppState(val scope: CoroutineScope, val api: FetchApi = FetchApi()) {
         if (screen == expected) go(next)
     }
 
-    /** After "Which one?": search the chosen item (reuses the signed items, so no second identify). */
-    fun chooseItem(index: Int) {
+    /**
+     * After "Which one?": search every picked item at once (each reuses the signed items, so no second identify;
+     * each is its own fetchItem call). Results opens when they're all back, on the first that found something;
+     * the others are tabs there. An item that finds nothing gets a note in its tab.
+     */
+    fun chooseItems(indices: List<Int>) {
         val s = session ?: return
         val token = s.response?.itemsToken ?: return
+        if (indices.isEmpty()) return
         s.loading = true
         s.error = null
+        s.results = emptyMap(); s.resultErrors = emptyMap(); s.current = null
         scope.launch {
-            try {
-                val r = api.fetchItem(s.photo, itemIndex = index, itemsToken = token)
-                s.response = r
-                if (r.status == "results") showWhenOn(Screen.WhichOne, Screen.Results) else s.error = "Nothing to buy found for that one."
-            } catch (e: Exception) {
-                s.error = e.friendly()
-            } finally {
-                s.loading = false
-            }
+            indices.map { i ->
+                async {
+                    try {
+                        val r = api.fetchItem(s.photo, itemIndex = i, itemsToken = token)
+                        if (r.status == "results" && r.offers.isNotEmpty()) s.results = s.results + (i to r)
+                        else s.resultErrors = s.resultErrors + (i to "Nothing to buy found for that one.")
+                    } catch (e: Exception) {
+                        s.resultErrors = s.resultErrors + (i to e.friendly())
+                    }
+                }
+            }.awaitAll()
+            s.loading = false
+            val first = indices.firstOrNull { it in s.results }
+            if (first == null) s.error = s.resultErrors.values.firstOrNull() ?: "Nothing to buy found."
+            else { s.current = first; showWhenOn(Screen.WhichOne, Screen.Results) }
         }
     }
 
