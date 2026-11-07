@@ -222,6 +222,7 @@ class AppState(val scope: CoroutineScope, val api: FetchApi = FetchApi()) {
         store.set("onboarded", "1")
         reset(Screen.Fetch)
         refresh()
+        takeSharedPhoto()
         registerPush()
     }
 
@@ -376,6 +377,14 @@ class AppState(val scope: CoroutineScope, val api: FetchApi = FetchApi()) {
     }
 
     // ---- Fetch ----
+    /** A photo shared from another app: fetch it now if the user is set up, else it waits for onboarding to finish. */
+    fun takeSharedPhoto() {
+        if (!onboarded || !api.firebase.signedIn) return
+        val photo = com.rimapps.fetchit.platform.SharedPhotos.pending.value ?: return
+        com.rimapps.fetchit.platform.SharedPhotos.pending.value = null
+        startFetch(photo)
+    }
+
     fun startFetch(photo: ByteArray, again: Snap? = null) {
         val snapId = again?.id ?: runCatching { addSnap(photo) }.getOrNull()
         val s = FetchSession(photo, snapId, again?.offers, again?.checkedAt)

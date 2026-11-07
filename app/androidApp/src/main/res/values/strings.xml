@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Fetch It</string>
+    <string name="share_label">Fetch it</string>
 </resources>

@@ -83,7 +83,7 @@ actual fun rememberPhotoSource(onPhoto: (ByteArray) -> Unit): PhotoSource {
 }
 
 /** Longest side ≤ 1024 px, EXIF rotation applied, JPEG 85: what fetchItem expects (and well under its 8 MB cap). */
-private fun downscaleJpeg(context: Context, uri: Uri, maxSide: Int = 1024): ByteArray {
+fun downscaleJpeg(context: Context, uri: Uri, maxSide: Int = 1024): ByteArray {
     val resolver = context.contentResolver
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     resolver.openInputStream(uri)!!.use { BitmapFactory.decodeStream(it, null, bounds) }

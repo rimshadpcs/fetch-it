@@ -9,6 +9,14 @@ import androidx.fragment.app.FragmentActivity
 import com.rimapps.fetchit.platform.AndroidFirebase
 import com.rimapps.fetchit.platform.AndroidPlatform
 import com.rimapps.fetchit.platform.DeepLinks
+import com.rimapps.fetchit.platform.SharedPhotos
+import com.rimapps.fetchit.platform.downscaleJpeg
+import android.net.Uri
+import androidx.core.content.IntentCompat
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.lang.ref.WeakReference
 
 // FragmentActivity (not ComponentActivity) because BiometricPrompt needs one.
@@ -42,5 +50,17 @@ class MainActivity : FragmentActivity() {
     private fun handleDeepLink(intent: Intent?) {
         intent?.data?.takeIf { it.scheme == "fetchit" }?.let { DeepLinks.incoming.tryEmit(it.toString()) }
         AndroidFirebase.handleIntent(intent) // a tapped notification
+        handleShare(intent)
+    }
+
+    // "Share to Fetch It": an image from another app's share sheet (a screenshot, a gallery photo, a saved post).
+    private fun handleShare(intent: Intent?) {
+        if (intent?.action != Intent.ACTION_SEND || intent.type?.startsWith("image/") != true) return
+        val uri = IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java) ?: return
+        intent.action = null // handled once, not again on recreation
+        lifecycleScope.launch {
+            val jpeg = withContext(Dispatchers.IO) { runCatching { downscaleJpeg(this@MainActivity, uri) }.getOrNull() }
+            if (jpeg != null) SharedPhotos.pending.value = jpeg
+        }
     }
 }

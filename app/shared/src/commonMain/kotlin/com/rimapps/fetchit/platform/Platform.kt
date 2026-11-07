@@ -20,6 +20,14 @@ object DeepLinks {
     val incoming = MutableSharedFlow<String>(extraBufferCapacity = 4)
 }
 
+/**
+ * A photo shared into the app from another app's share sheet ("Share to Fetch It"), already downscaled to a JPEG.
+ * Held here until the app can fetch it (signed in and onboarded); then it's taken and set to null.
+ */
+object SharedPhotos {
+    val pending = kotlinx.coroutines.flow.MutableStateFlow<ByteArray?>(null)
+}
+
 /** Ways to get a photo in, already downscaled to a JPEG (longest side ≤ 1024 px) for fetchItem. */
 class PhotoSource(val takePhoto: () -> Unit, val pickPhoto: () -> Unit)
 

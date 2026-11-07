@@ -83,6 +83,10 @@ fun App(register: ((() -> Boolean) -> Unit)? = null) {
     LaunchedEffect(Unit) {
         PushOpens.pending.collect { open -> if (open != null) { PushOpens.pending.value = null; app.openFromPush(open) } }
     }
+    // "Share to Fetch It": a photo shared from another app goes straight into a fetch (after onboarding, if needed).
+    LaunchedEffect(Unit) {
+        com.rimapps.fetchit.platform.SharedPhotos.pending.collect { photo -> if (photo != null) app.takeSharedPhoto() }
+    }
     val reduceMotion = systemReduceMotion()
     val photos = rememberPhotoSource { app.startFetch(it) }
     val shake = remember { ScreenShake() }
