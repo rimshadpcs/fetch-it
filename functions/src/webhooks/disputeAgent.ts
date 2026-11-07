@@ -87,7 +87,7 @@ export async function summarizeDispute(
     }
     return null;
   } catch (e) {
-    logger.warn("dispute agent failed", { disputeId: ctx.disputeId, toolCalls, message: (e as Error).message });
+    logger.warn("dispute agent failed", { disputeId: ctx.disputeId, toolCalls, error: (e as Error).message });
     return null;
   }
 }

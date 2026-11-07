@@ -696,7 +696,10 @@ reduce motion.
       Deployed Nov 8 (linkPhoto, watchOffer, checkWatches, checkWatchesNow); not seen on a device.
 - [~] Webhooks, Agent Toolkit, Goes well with, Gift mode (Nov 8). Deployed Nov 8 (all functions + the orders.paypalCaptureId
       index); webhook registered in the sandbox app: id 6KK242923K750983P → `PAYPAL_WEBHOOK_ID` in .env.fetchit-437a0 (a
-      defineString with an empty default still blocks a non-interactive deploy: register first). Not seen on a device.
+      defineString with an empty default still blocks a non-interactive deploy: register first). Live check: a sandbox
+      charge + refund (test/gift.mjs) → PayPal delivered PAYMENT.CAPTURE.COMPLETED + REFUNDED ~20 s later, signatures verified;
+      first deliveries failed while the new collection-group index was still building, PayPal's retries then succeeded.
+      Log errors under `error`, not `message` (the logger overwrites `message`). Not seen on a device.
       - **paypalWebhook** (`src/webhooks/`): `events.ts` parses PAYMENT.CAPTURE.COMPLETED/DENIED/REFUNDED/REVERSED,
         CUSTOMER.DISPUTE.CREATED/UPDATED/RESOLVED, VAULT.PAYMENT-TOKEN.DELETED (refund → capture via its `up` link; dispute →
         `disputed_transactions[].seller_transaction_id`). Orders found by `paypalCaptureId` (collection-group field override in

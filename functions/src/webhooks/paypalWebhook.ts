@@ -205,7 +205,7 @@ export const paypalWebhook = onRequest(
         ["paypal-auth-algo", "paypal-cert-url", "paypal-transmission-id", "paypal-transmission-sig", "paypal-transmission-time"].map((k) => [k, req.get(k)]),
       );
       const ok = webhookId ? await clients().paypal().verifyWebhook(headers, webhookId, event).catch((e) => {
-        logger.error("webhook verify call failed", { eventId: event.id, message: (e as Error).message });
+        logger.error("webhook verify call failed", { eventId: event.id, error: (e as Error).message });
         return false;
       }) : false;
       if (!ok) {
@@ -231,7 +231,7 @@ export const paypalWebhook = onRequest(
       res.status(200).send(outcome);
     } catch (e) {
       await marker.delete().catch(() => {});
-      logger.error("webhook failed", { eventId: event.id, type: event.event_type, message: (e as Error).message });
+      logger.error("webhook failed", { eventId: event.id, type: event.event_type, error: (e as Error).message });
       res.status(500).send("retry");
     }
   },
