@@ -310,6 +310,7 @@ fun AccountScreen(app: AppState) {
                 SettingRow(Doodle.ShieldCheck, "PayPal", if (app.user.paypalLinked) "linked · ${app.user.paypalEmail ?: "sandbox"}" else "not linked") {
                     if (!app.user.paypalLinked) app.go(Screen.LinkPayPal)
                 }
+                SettingRow(Doodle.Camera, "Your snaps", if (app.snaps.isEmpty()) "photos you fetch, to search again" else "${app.snaps.size} on this phone · search again") { app.go(Screen.Snaps()) }
                 SettingRow(Doodle.Heart, "Saved for later", if (app.saved.isEmpty()) "tap the heart on a result" else "${app.saved.size} saved") { app.go(Screen.Saved) }
                 SettingRow(Doodle.MapPin, "Saved places", app.savedPlaces.joinToString(" · ") { it.label + if (it.isDefault) " (default)" else "" }.ifBlank { "none yet" }) { app.go(Screen.Places) }
                 SettingRow(Doodle.Ruler, "My sizes", listOfNotNull(app.sizes.top, app.sizes.waist?.let { "waist $it" }, app.sizes.shoe, app.sizes.fit?.lowercase()?.let { "$it fit" }).joinToString(" · ").ifBlank { "not set" }) { app.go(Screen.OnbSizes) }
@@ -318,7 +319,8 @@ fun AccountScreen(app: AppState) {
                 SettingRow(Doodle.Lock, "Privacy", "what I keep, and what I don't") { open = if (open == "privacy") null else "privacy" }
                 Expand(open == "privacy") {
                     Text(
-                        "Your photo is only held in memory while I search; a crop of the item goes to the product search. " +
+                        "Your photos stay on this phone (Your snaps) so you can search again; they're only sent when you search, " +
+                            "and the server holds them in memory just for that search (a crop of the item goes to the product search). " +
                             "I never see your PayPal password: PayPal gives me a token to pay with, kept on the server where the app can't read it. " +
                             "Your rules, places, sizes and activity are stored under your account only.",
                         style = body(13.sp, color = Ink.Muted),

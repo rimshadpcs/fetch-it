@@ -1,5 +1,8 @@
 package com.rimapps.fetchit.platform
 
+import platform.Foundation.create
+import kotlinx.cinterop.usePinned
+import kotlinx.cinterop.addressOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import io.ktor.client.HttpClient
@@ -46,3 +49,22 @@ actual suspend fun appCheckToken(): String? = null
 
 @Composable
 actual fun systemReduceMotion(): Boolean = remember { platform.UIKit.UIAccessibilityIsReduceMotionEnabled() }
+
+// TODO(iOS): untested (iOS isn't compiled yet). Files under Application Support/snaps.
+@OptIn(kotlinx.cinterop.ExperimentalForeignApi::class, kotlinx.cinterop.BetaInteropApi::class)
+actual object PhotoFiles {
+    private fun path(id: String): String {
+        val dir = (platform.Foundation.NSSearchPathForDirectoriesInDomains(platform.Foundation.NSApplicationSupportDirectory, platform.Foundation.NSUserDomainMask, true).first() as String) + "/snaps"
+        platform.Foundation.NSFileManager.defaultManager.createDirectoryAtPath(dir, true, null, null)
+        return "$dir/$id.jpg"
+    }
+    actual fun save(id: String, bytes: ByteArray) {
+        val data = bytes.usePinned { platform.Foundation.NSData.create(bytes = it.addressOf(0), length = bytes.size.toULong()) }
+        data.writeToFile(path(id), true)
+    }
+    actual fun load(id: String): ByteArray? {
+        val data = platform.Foundation.NSData.dataWithContentsOfFile(path(id)) ?: return null
+        return ByteArray(data.length.toInt()).also { out -> out.usePinned { platform.posix.memcpy(it.addressOf(0), data.bytes, data.length) } }
+    }
+    actual fun delete(id: String) { platform.Foundation.NSFileManager.defaultManager.removeItemAtPath(path(id), null) }
+}

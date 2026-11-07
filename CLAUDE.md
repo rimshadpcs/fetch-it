@@ -627,3 +627,12 @@ inactive. No Material icons. Adding one: copy its `<path d>` values from `npm pa
       something, with a tab per searched item (`FetchSession.results` / `current`; items with nothing show "none
       found"); each tab's view is keyed so its sort, pick and "More matches" start fresh. The "choose" response is kept
       in `FetchSession.response` (no longer overwritten).
+- [~] Snaps (Nov 7): every fetched photo is kept **on the phone only** (`PhotoFiles` expect/actual: Android
+      filesDir/snaps/<id>.jpg; iOS Application Support, untested) with an index in KeyValueStore "snaps" (`Snap`: label =
+      first identified item, last search's offers as product|store → price, checkedAt; newest 60 kept; all deleted on
+      sign-out). Fetch shows a strip of recent snaps; You → Your snaps is the album (`SnapsScreen`: postage stamps with
+      perforated edges on graph paper, 3 columns, blur-in; Select → check dots → red "Delete N", tap twice). A snap's
+      sheet → **Search again** (`AppState.searchAgain`: same photo through the normal fetch); Results then says
+      "2 new · 1 cheaper since Nov 5" (or "Nothing new"), tapes "new!" on new matches and strikes through the old price
+      on cheaper ones. No server storage and no automatic re-checks (decided Nov 7). Privacy text in You updated.
+      Builds; not yet seen on a device.

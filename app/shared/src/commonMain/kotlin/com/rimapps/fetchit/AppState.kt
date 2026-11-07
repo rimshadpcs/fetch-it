@@ -1,5 +1,12 @@
 package com.rimapps.fetchit
 
+import kotlin.uuid.Uuid
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.time.ExperimentalTime
+import kotlin.time.Clock
+import com.rimapps.fetchit.platform.PhotoFiles
+import com.rimapps.fetchit.data.json
+import kotlinx.serialization.Serializable
 import com.rimapps.fetchit.data.SavedItem
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -44,6 +51,8 @@ sealed interface Screen {
     data class Rules(val focus: RuleFocus? = null) : Screen
     /** The You tab: house rules summary, PayPal, places, sizes, Scout's name, notifications, privacy, help, sign out. */
     data object Account : Screen
+    /** Every fetched photo as stamps (kept on the phone); [open] a snap's sheet straight away. */
+    data class Snaps(val open: String? = null) : Screen
     /** You → Saved: hearted results, each buyable at its live price. */
     data object Saved : Screen
     /** You & settings → Saved places: list, default, delete. */
@@ -80,8 +89,28 @@ enum class RuleFocus { Budget, PerItem, Categories, Asks;
 /** The user's saved sizes (local for now; a setProfile function would sync them). */
 data class Sizes(val top: String? = null, val waist: String? = null, val shoe: String? = null, val fit: String? = null, val askIfUnsure: Boolean = true)
 
+/** An offer as a Snap remembers it, to spot what's new or cheaper next time ("product|store" → price). */
+@Serializable
+data class SnapOffer(val key: String, val price: Double)
+
+/**
+ * A photo the user fetched, kept on this device (PhotoFiles) so they can search again later. [offers] are the
+ * matches from the last search; [checkedAt] when that was.
+ */
+@Serializable
+data class Snap(
+    val id: String,
+    val createdAt: Long,
+    val label: String? = null,
+    val checkedAt: Long = createdAt,
+    val offers: List<SnapOffer> = emptyList(),
+)
+
+fun Offer.snapKey() = "$productId|$merchant"
+
 /** One photo's journey: identify → (Which one?) → offers. */
-class FetchSession(val photo: ByteArray) {
+/** [snapId]: the Snap this photo is saved as. [before]: the last search's offers when this is a search-again. */
+class FetchSession(val photo: ByteArray, val snapId: String? = null, val before: List<SnapOffer>? = null, val beforeAt: Long? = null) {
     var identified by mutableStateOf<List<DetectedItem>>(emptyList())
     /** The first answer: "results" for one item, or "choose" (several items + the signed itemsToken). */
     var response by mutableStateOf<FetchResponse?>(null)
@@ -97,6 +126,11 @@ class FetchSession(val photo: ByteArray) {
     /** What Results shows: the current picked item's offers, or the single-item answer. */
     val shown: FetchResponse? get() = current?.let { results[it] } ?: response?.takeIf { it.status == "results" }
 }
+
+const val MAX_SNAPS = 60
+
+@OptIn(ExperimentalTime::class)
+private fun now() = Clock.System.now().toEpochMilliseconds()
 
 class AppState(val scope: CoroutineScope, val api: FetchApi = FetchApi()) {
     private val store = KeyValueStore()
@@ -177,6 +211,7 @@ class AppState(val scope: CoroutineScope, val api: FetchApi = FetchApi()) {
 
     fun signOut() {
         api.firebase.signOut()
+        deleteSnaps(snaps.map { it.id }.toSet()) // they're this user's photos
         listOf("onboarded", "dogName", "sizes").forEach { store.set(it, null) }
         dogName = "Scout"; sizes = Sizes(); user = UserDoc(); rules = null; places = emptyList(); activity = emptyList()
         reset(Screen.Welcome)
@@ -258,9 +293,57 @@ class AppState(val scope: CoroutineScope, val api: FetchApi = FetchApi()) {
 
     fun budgetLeft(): Double? = rules?.let { it.monthlyBudget - monthToDate }
 
+    // ---- Snaps: every fetched photo, kept on this phone so it can be searched again ----
+    var snaps by mutableStateOf(loadSnaps())
+        private set
+
+    private fun loadSnaps(): List<Snap> = store.get("snaps")?.let { runCatching { json.decodeFromString<List<Snap>>(it) }.getOrNull() } ?: emptyList()
+
+    private fun saveSnaps(list: List<Snap>) {
+        snaps = list
+        store.set("snaps", json.encodeToString(list))
+    }
+
+    /** Keep the newest [MAX_SNAPS]; older photos are deleted from the phone. */
+    private fun addSnap(photo: ByteArray): String {
+        @OptIn(ExperimentalUuidApi::class) val id = Uuid.random().toHexString()
+        PhotoFiles.save(id, photo)
+        val list = listOf(Snap(id, now())) + snaps
+        list.drop(MAX_SNAPS).forEach { PhotoFiles.delete(it.id) }
+        saveSnaps(list.take(MAX_SNAPS))
+        return id
+    }
+
+    /** After a search: name the snap after what was found and remember its matches (merged over several items). */
+    private fun recordSnap(s: FetchSession, label: String?, offers: List<Offer>, fresh: Boolean) {
+        val id = s.snapId ?: return
+        saveSnaps(snaps.map { snap ->
+            if (snap.id != id) snap else {
+                val got = offers.map { SnapOffer(it.snapKey(), it.price) }
+                snap.copy(
+                    label = snap.label ?: label,
+                    checkedAt = now(),
+                    offers = if (fresh) got else (snap.offers.filter { o -> got.none { it.key == o.key } } + got),
+                )
+            }
+        })
+    }
+
+    fun deleteSnaps(ids: Set<String>) {
+        ids.forEach { PhotoFiles.delete(it) }
+        saveSnaps(snaps.filterNot { it.id in ids })
+    }
+
+    /** Search a saved photo again; Results then marks what's new or cheaper than [Snap.offers]. */
+    fun searchAgain(snap: Snap) {
+        val photo = PhotoFiles.load(snap.id) ?: run { deleteSnaps(setOf(snap.id)); return }
+        startFetch(photo, snap)
+    }
+
     // ---- Fetch ----
-    fun startFetch(photo: ByteArray) {
-        val s = FetchSession(photo)
+    fun startFetch(photo: ByteArray, again: Snap? = null) {
+        val snapId = again?.id ?: runCatching { addSnap(photo) }.getOrNull()
+        val s = FetchSession(photo, snapId, again?.offers, again?.checkedAt)
         session = s
         reset(Screen.Fetch)
         scope.launch {
@@ -269,6 +352,8 @@ class AppState(val scope: CoroutineScope, val api: FetchApi = FetchApi()) {
                 val r = api.fetchItem(photo, onItems = { s.identified = it })
                 s.response = r
                 s.identified = r.items
+                if (r.status == "results") recordSnap(s, r.items.firstOrNull()?.item_type, r.offers, fresh = true)
+                else if (r.status == "choose") recordSnap(s, r.items.firstOrNull()?.item_type, emptyList(), fresh = again != null)
                 when (r.status) {
                     "choose" -> showWhenOn(Screen.Fetch, Screen.WhichOne)
                     "results" -> showWhenOn(Screen.Fetch, Screen.Results)
@@ -308,7 +393,10 @@ class AppState(val scope: CoroutineScope, val api: FetchApi = FetchApi()) {
                 async {
                     try {
                         val r = api.fetchItem(s.photo, itemIndex = i, itemsToken = token)
-                        if (r.status == "results" && r.offers.isNotEmpty()) s.results = s.results + (i to r)
+                        if (r.status == "results" && r.offers.isNotEmpty()) {
+                            s.results = s.results + (i to r)
+                            recordSnap(s, s.response?.items?.getOrNull(i)?.item_type, r.offers, fresh = false)
+                        }
                         else s.resultErrors = s.resultErrors + (i to "Nothing to buy found for that one.")
                     } catch (e: Exception) {
                         s.resultErrors = s.resultErrors + (i to e.friendly())

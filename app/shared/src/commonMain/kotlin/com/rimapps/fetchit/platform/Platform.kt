@@ -57,3 +57,10 @@ expect suspend fun appCheckToken(): String?
 /** The system's "reduce motion" / "remove animations" accessibility setting. */
 @Composable
 expect fun systemReduceMotion(): Boolean
+
+/** Photo files kept on this device only (Snaps): never uploaded except when the user searches with one. */
+expect object PhotoFiles {
+    fun save(id: String, bytes: ByteArray)
+    fun load(id: String): ByteArray?
+    fun delete(id: String)
+}

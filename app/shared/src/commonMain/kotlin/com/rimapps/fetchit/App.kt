@@ -1,5 +1,6 @@
 package com.rimapps.fetchit
 
+import com.rimapps.fetchit.ui.SnapsScreen
 import com.rimapps.fetchit.ui.SavedScreen
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -108,6 +109,7 @@ fun App(register: ((() -> Boolean) -> Unit)? = null) {
                                     Screen.Account -> AccountScreen(app)
                                     Screen.Places -> PlacesScreen(app)
                                     Screen.Saved -> SavedScreen(app)
+                                    is Screen.Snaps -> SnapsScreen(app, screen)
                                     is Screen.PlaceEdit -> PlaceEditScreen(app, screen)
                                     Screen.MotionLab -> MotionLabScreen(app)
                                     Screen.WhichOne -> WhichOneScreen(app)

@@ -1,5 +1,10 @@
 package com.rimapps.fetchit.ui
 
+import kotlinx.datetime.toLocalDateTime
+import com.rimapps.fetchit.ui.motion.riseIn
+import com.rimapps.fetchit.ui.motion.popIn
+import com.rimapps.fetchit.snapKey
+import androidx.compose.ui.text.style.TextDecoration
 import com.rimapps.fetchit.data.FetchResponse
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.runtime.key
@@ -145,6 +150,8 @@ fun FetchScreen(app: AppState) {
                 }
             }
             Segmented(listOf("Snap", "Upload"), mode, { it }, { mode = it }, Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 12.dp))
+            // Earlier photos, ready to search again.
+            if (session == null) SnapsStrip(app, Modifier.padding(bottom = 6.dp))
             Box(Modifier.fillMaxWidth().height(1.dp).background(Ink.Divider))
 
             val ready = session?.response?.takeIf { !session.loading && session.error == null && it.status in setOf("results", "choose") }
@@ -355,6 +362,10 @@ private fun ResultsFor(app: AppState, s: FetchSession, r: FetchResponse) {
     var sort by remember { mutableStateOf("Best") }
     var underLimit by remember { mutableStateOf(false) }
     val cheapest = r.offers.minByOrNull { it.price }
+    // Searching a Snap again: what's new or cheaper than last time.
+    val before = s.before?.associate { it.key to it.price }
+    fun wasPrice(o: Offer) = before?.get(o.snapKey())?.takeIf { o.price < it - 0.005 }
+    fun isNew(o: Offer) = before != null && o.snapKey() !in before
     val shown = r.offers.let { if (sort == "Cheapest") it.sortedBy { o -> o.price } else it }.filter { !underLimit || limit == null || it.price <= limit }
     var picked by remember { mutableStateOf(r.offers.firstOrNull()) }
     // "More matches" (findSimilar), loaded on request into the polaroid fan; a fan pick is what Buy buys too.
@@ -417,6 +428,22 @@ private fun ResultsFor(app: AppState, s: FetchSession, r: FetchResponse) {
                     }
                 }
             }
+            if (before != null) {
+                val newCount = r.offers.count { isNew(it) }
+                val cheaper = r.offers.count { wasPrice(it) != null }
+                val since = s.beforeAt?.let { " since ${shortDate(it)}" } ?: ""
+                Text(
+                    when {
+                        newCount == 0 && cheaper == 0 -> "Nothing new$since."
+                        else -> listOfNotNull(
+                            if (newCount > 0) "$newCount new" else null,
+                            if (cheaper > 0) "$cheaper cheaper" else null,
+                        ).joinToString(" · ") + since
+                    },
+                    style = hand(22.sp, if (newCount + cheaper > 0) Ink.Accent else Ink.Muted),
+                    modifier = Modifier.padding(start = 70.dp, top = 4.dp).riseIn(300),
+                )
+            }
             // Several things searched: a tab for each.
             if (s.results.size + s.resultErrors.size > 1) {
                 val names = s.response?.items.orEmpty()
@@ -451,6 +478,7 @@ private fun ResultsFor(app: AppState, s: FetchSession, r: FetchResponse) {
                                         },
                                         warn = limit != null && o.price > limit,
                                         saved = app.isSaved(o), onToggleSave = { app.toggleSaved(o) },
+                                        isNew = isNew(o), was = wasPrice(o),
                                         onClick = { picked = o },
                                     )
                                 }
@@ -565,16 +593,23 @@ private fun defaultSize(app: AppState, o: Offer): String? {
 }
 
 @Composable
-private fun OfferCard(o: Offer, selected: Boolean, height: androidx.compose.ui.unit.Dp, tilt: Float, caption: String?, warn: Boolean, saved: Boolean, onToggleSave: () -> Unit, onClick: () -> Unit) {
+private fun OfferCard(o: Offer, selected: Boolean, height: androidx.compose.ui.unit.Dp, tilt: Float, caption: String?, warn: Boolean, saved: Boolean, onToggleSave: () -> Unit, isNew: Boolean = false, was: Double? = null, onClick: () -> Unit) {
     Column(Modifier.clickable(onClick = onClick)) {
         Box(Modifier.rotate(tilt).then(if (selected) Modifier.border(3.dp, Ink.Ink) else Modifier)) {
             ProductImage(o.imageUrl, Modifier.fillMaxWidth().height(height))
             HeartButton(saved, onToggleSave, Modifier.align(Alignment.TopEnd).padding(6.dp))
+            // Searched again: a strip of tape marks a match that wasn't there last time.
+            if (isNew) Text(
+                "new!", style = hand(18.sp, Ink.Accent),
+                modifier = Modifier.align(Alignment.TopStart).padding(6.dp).rotate(-6f).popIn(250)
+                    .background(Color(0xFFEDE6D3).copy(alpha = 0.95f)).padding(horizontal = 8.dp, vertical = 1.dp),
+            )
         }
         Column(Modifier.padding(start = 6.dp, end = 6.dp, top = 8.dp)) {
             Row {
                 Text(o.merchant.removePrefix("www."), style = body(14.sp, FontWeight.SemiBold, Ink.Muted), maxLines = 1, modifier = Modifier.weight(1f))
-                Text(money(o.price, o.currency), style = serif(17.sp))
+                if (was != null) Text(money(was, o.currency), style = serif(14.sp, Ink.Grey).copy(textDecoration = TextDecoration.LineThrough), modifier = Modifier.padding(end = 4.dp))
+                Text(money(o.price, o.currency), style = serif(17.sp, if (was != null) Ink.Accent else Ink.Ink))
             }
             Text(o.title, style = body(12.sp, color = Ink.Grey), maxLines = 2)
             // Scout's pick gets a star and a doodle arrow pointing back up at the photo.
@@ -585,4 +620,13 @@ private fun OfferCard(o: Offer, selected: Boolean, height: androidx.compose.ui.u
             } else if (caption != null) Text(caption, style = hand(19.sp, if (warn) Ink.Warning else Ink.Ink))
         }
     }
+}
+
+/** "Nov 5" (or "today"). */
+@OptIn(kotlin.time.ExperimentalTime::class)
+fun shortDate(millis: Long): String {
+    val tz = kotlinx.datetime.TimeZone.currentSystemDefault()
+    val d = kotlin.time.Instant.fromEpochMilliseconds(millis).toLocalDateTime(tz).date
+    val today = kotlin.time.Clock.System.now().toLocalDateTime(tz).date
+    return if (d == today) "earlier today" else "${d.month.name.take(3).lowercase().replaceFirstChar { it.uppercase() }} ${d.day}"
 }

@@ -126,3 +126,10 @@ actual fun systemReduceMotion(): Boolean {
     val context = LocalContext.current
     return remember { android.provider.Settings.Global.getFloat(context.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f }
 }
+
+actual object PhotoFiles {
+    private fun file(id: String) = File(File(AndroidPlatform.context.filesDir, "snaps").apply { mkdirs() }, "$id.jpg")
+    actual fun save(id: String, bytes: ByteArray) = file(id).writeBytes(bytes)
+    actual fun load(id: String): ByteArray? = file(id).takeIf { it.exists() }?.readBytes()
+    actual fun delete(id: String) { file(id).delete() }
+}
