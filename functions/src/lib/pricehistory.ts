@@ -66,3 +66,13 @@ export function summarizeHistory(history: HistoryPoint[], now: number | null, to
   }
   return { points, low, high, lowOn, days: span, verdict, message, currency };
 }
+
+/**
+ * A drop that hasn't reached the target yet: the watch check pushes "Price dropped" (nothing is bought). Returns the price to say it's down from, or null.
+ * Only a new low since the watch started counts, so $49 → $45 → $48 → $45 notifies once; the next push needs a price under $45.
+ */
+export function dropToNotify(w: { startPrice: number | null; lastPrice: number | null; notifiedPrice?: number | null }, price: number): number | null {
+  const bar = w.notifiedPrice ?? w.startPrice ?? w.lastPrice;
+  if (bar == null || !(price < bar - 0.005)) return null;
+  return bar;
+}

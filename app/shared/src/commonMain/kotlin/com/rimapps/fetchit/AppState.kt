@@ -258,9 +258,14 @@ class AppState(val scope: CoroutineScope, val api: FetchApi = FetchApi()) {
         runCatching { pushToken()?.let { api.registerPushToken(it, platformName) } }
     }
 
-    /** A tapped notification: the approval sheet, or the purchase's outcome. */
+    /** A tapped notification: the approval sheet, the purchase's outcome, or (a drop above target) Price watches. */
     fun openFromPush(p: PushOpen) = scope.launch {
         if (!api.firebase.signedIn) return@launch
+        if (p.open == "watch") {
+            runCatching { api.watches() }.onSuccess { watches = it }
+            reset(Screen.Fetch); go(Screen.Watches)
+            return@launch
+        }
         runCatching { api.purchase(p.purchaseId) }.getOrNull()?.let(::remember)
         refreshActivity()
         val target = if (p.open == "approve" && purchases.value[p.purchaseId]?.status == "needs_approval") Screen.Approve(p.purchaseId) else Screen.Done(p.purchaseId)

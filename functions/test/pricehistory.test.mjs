@@ -1,7 +1,7 @@
 // Price history → sparkline points + "buy now or wait" (pure). Run: npm test
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { summarizeHistory } from "../lib/lib/pricehistory.js";
+import { dropToNotify, summarizeHistory } from "../lib/lib/pricehistory.js";
 
 const today = new Date("2026-11-07T12:00:00Z");
 const day = (d) => new Date(today.getTime() - d * 86_400_000).toISOString().slice(0, 10) + "T00:00:00Z";
@@ -45,4 +45,16 @@ test("the live price counts even when history hasn't caught up", () => {
 test("too little history → null", () => {
   assert.equal(summarizeHistory(series([42.99]), 42.99, today), null);
   assert.equal(summarizeHistory([], null, today), null);
+});
+
+test("drop pushes: only a new low since the watch started, never a bounce back", () => {
+  const w = { startPrice: 49, lastPrice: 49, notifiedPrice: null };
+  assert.equal(dropToNotify(w, 49), null, "no change");
+  assert.equal(dropToNotify(w, 52), null, "went up");
+  assert.equal(dropToNotify(w, 45), 49, "first drop, down from the start price");
+  const after = { ...w, notifiedPrice: 45 };
+  assert.equal(dropToNotify(after, 48), null);
+  assert.equal(dropToNotify(after, 45), null, "back to a low we already pushed");
+  assert.equal(dropToNotify(after, 43.5), 45, "a new low");
+  assert.equal(dropToNotify({ startPrice: null, lastPrice: null }, 40), null, "nothing to compare with");
 });

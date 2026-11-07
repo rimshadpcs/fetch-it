@@ -95,3 +95,20 @@ test("after stopping, watching again starts a new watch", async () => {
   assert.ok(!error, JSON.stringify(error));
   assert.notEqual(result.watchId, watchId);
 });
+
+test("a drop still above the target pushes once (new low only) and buys nothing", async () => {
+  const live = (await user.collection("watches").where("status", "==", "watching").get()).docs[0];
+  // Pretend we started watching at $999 with a $1 target: today's price is a drop, but nowhere near the target.
+  await live.ref.update({ startPrice: 999, targetPrice: 1, notifiedPrice: null });
+  let { error } = await call("checkWatchesNow", {});
+  assert.ok(!error, JSON.stringify(error));
+  const w = (await live.ref.get()).data();
+  assert.equal(w.status, "watching");
+  assert.ok(w.notifiedPrice > 0 && w.notifiedPrice < 999, `notifiedPrice ${w.notifiedPrice}`);
+  assert.equal(w.purchaseId, null);
+  console.log(`   drop pushed at ${w.notifiedPrice}`);
+  ({ error } = await call("checkWatchesNow", {}));
+  assert.ok(!error, JSON.stringify(error));
+  assert.equal((await live.ref.get()).data().notifiedPrice, w.notifiedPrice, "same price → no second push");
+  assert.equal((await user.collection("purchases").get()).size, 0);
+});

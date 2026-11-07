@@ -49,7 +49,7 @@ object AndroidFirebase {
         if (Build.VERSION.SDK_INT >= 26) {
             context.getSystemService(NotificationManager::class.java).createNotificationChannel(
                 NotificationChannel(CHANNEL, "Needs your OK", NotificationManager.IMPORTANCE_HIGH).apply {
-                    description = "Purchases waiting for your approval, and price-drop buys"
+                    description = "Purchases waiting for your approval, and price drops on things you watch"
                 },
             )
         }
@@ -57,14 +57,16 @@ object AndroidFirebase {
 
     /** Extras FCM puts on the launch intent when a notification is tapped (or ours, from [show]). */
     fun handleIntent(intent: Intent?) {
-        val purchaseId = intent?.getStringExtra("purchaseId") ?: return
-        PushOpens.pending.value = PushOpen(intent.getStringExtra("open") ?: "approve", purchaseId)
+        if (intent == null) return
+        val id = intent.getStringExtra("purchaseId") ?: intent.getStringExtra("watchId") ?: return
+        PushOpens.pending.value = PushOpen(intent.getStringExtra("open") ?: "approve", id)
     }
 
     /** In the foreground FCM doesn't show notification messages itself. */
     fun show(context: Context, message: RemoteMessage) {
         val n = message.notification ?: return
-        val purchaseId = message.data["purchaseId"] ?: return
+        val watchId = message.data["watchId"]
+        val purchaseId = message.data["purchaseId"] ?: watchId?.let { "watch-$it" } ?: return // tag: a newer drop replaces the older one
         if (PushOpens.onScreen.value == purchaseId) return // already looking at it
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED

@@ -84,7 +84,7 @@ KMP app ──Firebase Auth──▶ Cloud Functions (TypeScript)
 | `undoPurchase` ✅ | `{purchaseId}`: undo an auto-buy inside the window (nothing charged) or decline an approval |
 | `watchOffer` ✅ | `{offerId, targetPrice, size?, placeId?}` → `users/{uid}/watches/{id}` + Channel3 price tracking; one live watch per item (again = new target, startPrice kept) |
 | `stopWatch` ✅ | `{watchId}`: a watching watch → `stopped` + activity; anything else refused |
-| `checkWatches` ✅ | scheduled hourly: live price ≤ target → "Price dropped" activity → same purchase path (rules apply) |
+| `checkWatches` ✅ | scheduled hourly: live price ≤ target → "Price dropped" activity → same purchase path (rules apply); a new low still above target → push only (`notifiedPrice`, tap → Price watches) |
 | `checkWatchesNow` ✅ | callable "check now" for the caller's own watches (how the emulator test runs a check) |
 | `findSimilar` ✅ | `{offerId, maxPrice?}`: "More like this" / "Find cheaper" via Channel3 `/v1/similar`, signed offers |
 | `setRules` | update house rules (reads come straight from Firestore) |
@@ -676,3 +676,9 @@ reduce motion.
       each live watch a pen sparkline (draws on in 600 ms), dashed target line, dot coloured by verdict, high/low, and
       Scout's line ("It was $41.99 on Oct 31. I'd wait for a drop."). `npm run test:watch` checks it on the real lamp.
       Deployed Nov 7 (watchOffer, checkWatches, checkWatchesNow); existing watches fill in at their next hourly check.
+- [~] Drop pushes (Nov 7): a watch whose price falls to a new low but stays above the target now pushes "Price dropped: <title> ·
+      $X" / "Down from $Y (N% off since you started watching). Still above your $T target, so I'll keep watching." Nothing is
+      bought. `dropToNotify` (lib/pricehistory.ts, unit test, 48 total): only a price under `notifiedPrice ?? startPrice`, so a
+      bounce back to an old low doesn't re-push; `notifiedPrice` survives re-targeting. Push data `{open: "watch", watchId}`,
+      Android tag `watch-<id>` (a newer drop replaces the older one), tap → Price watches. `npm run test:watch` (6 tests).
+      Not deployed; not seen on a device.

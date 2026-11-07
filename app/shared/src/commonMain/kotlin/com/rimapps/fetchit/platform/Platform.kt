@@ -50,7 +50,10 @@ expect val platformName: String
 @Composable
 expect fun rememberNotificationPermission(): () -> Unit
 
-/** A tapped notification asks the app to open a purchase: `approve` → the approval sheet, `purchase` → its outcome. */
+/**
+ * A tapped notification: `approve` → the approval sheet, `purchase` → its outcome (id = purchase id),
+ * `watch` → Price watches (id = watch id: the price dropped but hasn't reached the target).
+ */
 data class PushOpen(val open: String, val purchaseId: String)
 
 object PushOpens {

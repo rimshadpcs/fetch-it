@@ -25,15 +25,13 @@ export const registerPushToken = onCall<{ token: string; platform: string }>({ c
 });
 
 /**
- * What a tap opens: `approve` → the approval sheet for purchaseId, `purchase` → that purchase's outcome.
+ * What a tap opens: `approve` → the approval sheet for purchaseId, `purchase` → that purchase's outcome,
+ * `watch` → Price watches (a drop that hasn't reached the target yet; watchId set, no purchase).
  * Data values must be strings (FCM).
  */
-export interface Push {
-  title: string;
-  body: string;
-  open: "approve" | "purchase";
-  purchaseId: string;
-}
+export type Push =
+  | { title: string; body: string; open: "approve" | "purchase"; purchaseId: string }
+  | { title: string; body: string; open: "watch"; watchId: string };
 
 /** Best effort: a failed push is logged, never fails the purchase. Tokens FCM says are dead are removed. */
 export async function notify(uid: string, push: Push): Promise<void> {
@@ -41,19 +39,22 @@ export async function notify(uid: string, push: Push): Promise<void> {
     const snap = await devices(uid).get();
     if (snap.empty) return;
     const tokens = snap.docs.map((d) => d.data().token as string);
+    const data: Record<string, string> = push.open === "watch" ? { open: push.open, watchId: push.watchId } : { open: push.open, purchaseId: push.purchaseId };
+    // One notification per purchase / watch: a later drop on the same watch replaces the earlier one.
+    const tag = push.open === "watch" ? `watch-${push.watchId}` : push.purchaseId;
     const res = await getMessaging().sendEachForMulticast({
       tokens,
       notification: { title: push.title, body: push.body },
-      data: { open: push.open, purchaseId: push.purchaseId },
-      android: { priority: "high", notification: { channelId: "approvals", tag: push.purchaseId } },
+      data,
+      android: { priority: "high", notification: { channelId: "approvals", tag } },
       apns: { payload: { aps: { sound: "default" } } },
     });
     const dead = res.responses
       .map((r, i) => (r.error && ["messaging/registration-token-not-registered", "messaging/invalid-argument"].includes(r.error.code) ? snap.docs[i] : null))
       .filter((d) => d !== null);
     await Promise.all(dead.map((d) => d.ref.delete()));
-    logger.info("push sent", { uid, purchaseId: push.purchaseId, open: push.open, sent: res.successCount, failed: res.failureCount, removed: dead.length });
+    logger.info("push sent", { uid, tag, open: push.open, sent: res.successCount, failed: res.failureCount, removed: dead.length });
   } catch (e) {
-    logger.warn("push failed", { uid, purchaseId: push.purchaseId, message: (e as Error).message });
+    logger.warn("push failed", { uid, open: push.open, message: (e as Error).message });
   }
 }

@@ -7,7 +7,8 @@ import { db, userDoc } from "../lib/db.js";
 import type { OfferClaim } from "../lib/sign.js";
 import { money } from "../rules.js";
 import { fetchLiveOffer } from "./live.js";
-import { summarizeHistory, type HistorySummary } from "../lib/pricehistory.js";
+import { dropToNotify, summarizeHistory, type HistorySummary } from "../lib/pricehistory.js";
+import { notify } from "../push.js";
 import { clients, requireUid, secrets, startPurchase, verifyOffer, type PurchaseResponse } from "./purchase.js";
 
 export interface WatchDoc {
@@ -31,6 +32,8 @@ export interface WatchDoc {
   /** Last 30 days of Channel3 price history, summarised (sparkline + buy-now-or-wait); refreshed ≤ every 12 h. */
   history?: HistorySummary | null;
   historyAt?: Timestamp | null;
+  /** Lowest price we've pushed a "price dropped" for while still above the target (so a bounce doesn't re-notify). */
+  notifiedPrice?: number | null;
   triggeredAt: Timestamp | null;
   createdAt: FieldValue | Timestamp;
   updatedAt: FieldValue | Timestamp;
@@ -110,6 +113,7 @@ export const watchOffer = onCall<{ offerId: string; targetPrice: number; size?: 
       placeId: place,
       startPrice: existing.empty ? live.price : ((existing.docs[0].data().startPrice as number | null) ?? live.price),
       lastPrice: live.price,
+      notifiedPrice: existing.empty ? null : ((existing.docs[0].data().notifiedPrice as number | null) ?? null),
       lastCheckedAt: Timestamp.now(),
       channel3Tracking: tracking,
       purchaseId: null,
@@ -162,7 +166,11 @@ async function checkWatch(uid: string, ref: DocumentReference, w: WatchDoc): Pro
   await ref.update({ lastPrice: live.price, lastCheckedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
   if (!w.historyAt || Date.now() - w.historyAt.toMillis() > HISTORY_EVERY_MS) await refreshHistory(c3, ref, w.productId, live.price);
   const result: WatchCheck = { uid, watchId: ref.id, title: w.title, price: live.price, targetPrice: w.targetPrice, triggered: false };
-  if (live.price === null || live.price > w.targetPrice + 1e-9) return result;
+  if (live.price === null) return result;
+  if (live.price > w.targetPrice + 1e-9) {
+    await maybeNotifyDrop(uid, ref, w, live.price, live.currency);
+    return result;
+  }
 
   // Claim the watch so two overlapping checks can't both buy.
   const claimed = await db.runTransaction(async (tx) => {
@@ -185,6 +193,19 @@ async function checkWatch(uid: string, ref: DocumentReference, w: WatchDoc): Pro
   const purchase = await startPurchase(uid, w, { placeId: w.placeId, size: w.size, source: "watch", watchId: ref.id, priceWas: w.startPrice });
   await ref.update({ purchaseId: purchase.purchaseId, purchaseStatus: purchase.status, updatedAt: FieldValue.serverTimestamp() });
   return { ...result, triggered: true, purchase };
+}
+
+async function maybeNotifyDrop(uid: string, ref: DocumentReference, w: WatchDoc, price: number, currency: string) {
+  const was = dropToNotify(w, price);
+  if (was === null) return;
+  await ref.update({ notifiedPrice: price });
+  const off = Math.round(((w.startPrice ?? was) - price) / (w.startPrice ?? was) * 100);
+  await notify(uid, {
+    title: `Price dropped: ${w.title} · ${money(price, currency)}`,
+    body: `Down from ${money(was, currency)}${off >= 1 ? ` (${off}% off since you started watching)` : ""}. Still above your ${money(w.targetPrice, w.currency)} target, so I'll keep watching.`,
+    open: "watch",
+    watchId: ref.id,
+  });
 }
 
 /** Check every active watch (or one user's). A few at a time: auto-buys wait out their undo window. */
