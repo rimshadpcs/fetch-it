@@ -169,17 +169,17 @@ enum class Doodle(internal vararg val paths: String) {
     ),
     ;
 
-    private val cache = HashMap<Float, ImageVector>()
+    private val cache = HashMap<Pair<Float, Boolean>, ImageVector>()
 
     /**
      * A stroke-only vector on the 48 grid, drawn in black (tint it). [strokeWidth] is in grid units: the set
      * draws at 3.4; at 24 dp we use ~4 (≈ 2 dp), a little more for the active tab.
      */
-    fun vector(strokeWidth: Float = 4f): ImageVector = cache.getOrPut(strokeWidth) {
+    fun vector(strokeWidth: Float = 4f, filled: Boolean = false): ImageVector = cache.getOrPut(strokeWidth to filled) {
         ImageVector.Builder(name, 48.dp, 48.dp, 48f, 48f).apply {
             paths.forEach { d ->
                 addPath(
-                    addPathNodes(d), fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = strokeWidth,
+                    addPathNodes(d), fill = if (filled) SolidColor(Color.Black) else null, stroke = SolidColor(Color.Black), strokeLineWidth = strokeWidth,
                     strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
                 )
             }
@@ -187,10 +187,10 @@ enum class Doodle(internal vararg val paths: String) {
     }
 }
 
-/** A doodle icon at [size] in [color] (#111111 by default). [contentDescription] null = decorative. */
+/** A doodle icon at [size] in [color] (#111111 by default). [filled]: closed shapes filled too (the saved heart). [contentDescription] null = decorative. */
 @Composable
-fun DoodleIcon(icon: Doodle, contentDescription: String?, modifier: Modifier = Modifier, size: Dp = 24.dp, color: Color = Ink.Ink, strokeWidth: Float = 4f) {
-    val vector = remember(icon, strokeWidth) { icon.vector(strokeWidth) }
+fun DoodleIcon(icon: Doodle, contentDescription: String?, modifier: Modifier = Modifier, size: Dp = 24.dp, color: Color = Ink.Ink, strokeWidth: Float = 4f, filled: Boolean = false) {
+    val vector = remember(icon, strokeWidth, filled) { icon.vector(strokeWidth, filled) }
     Image(
         rememberVectorPainter(vector), contentDescription, modifier.size(size),
         colorFilter = ColorFilter.tint(color),

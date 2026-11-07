@@ -55,7 +55,7 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /**
- * Save for later: the doodle heart, ink when off, red (and a bit bolder) when saved. Saving pops it (1.35 → 1)
+ * Save for later: the doodle heart, an ink outline when off, filled red when saved. Saving pops it (1.35 → 1)
  * with a little burst of pen strokes and a tick; with reduce motion it just changes colour.
  */
 @Composable
@@ -89,7 +89,7 @@ fun HeartButton(saved: Boolean, onToggle: () -> Unit, modifier: Modifier = Modif
         }
         DoodleIcon(
             Doodle.Heart, null, Modifier.graphicsLayer { scaleX = pop.value; scaleY = pop.value },
-            size = 24.dp, color = if (saved) Ink.Accent else Ink.Ink, strokeWidth = if (saved) 5f else 4f,
+            size = 24.dp, color = if (saved) Ink.Accent else Ink.Ink, strokeWidth = if (saved) 4.6f else 4f, filled = saved,
         )
     }
 }
