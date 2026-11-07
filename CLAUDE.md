@@ -196,7 +196,7 @@ different address → form) → Set house rules → Your sizes (optional) → Me
 Main: Fetch (camera / Upload / Voice) → Look what I found → Refine by voice → Fetched (auto-bought, undo) |
 Needs your OK (biometric) → Activity · You
 Bottom nav (`ui/Nav.kt`, drawn once in `App` outside the screen switcher): Activity · **Fetch** (80 dp black circle
-sitting a third out of the bar, ringed in white, camera doodle; no ears; tapping it on Fetch opens the camera) · You. No "+" (Fetch has Upload). The light
+sitting a third out of the bar, ringed in white, camera doodle; no ears; tapping it on Fetch opens the camera) · You (user doodle). No "+" (Fetch has Upload). The light
 pill slides between Activity and You; Activity has a red dot while a purchase needs your OK (`AppState.needsApproval`).
 You (former Account): house rules summary → Rules, then PayPal, saved places, sizes, fetcher's name (long-press: Motion
 lab), notifications, privacy, help, sign out. Rules is a pushed screen: from You, the budget chip on Fetch, or "Change

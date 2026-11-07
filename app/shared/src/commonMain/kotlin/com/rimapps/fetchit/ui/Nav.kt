@@ -99,7 +99,7 @@ fun BottomNav(app: AppState, photos: PhotoSource, modifier: Modifier = Modifier)
                     if (current != Screen.Activity) haptics.tick(); app.reset(Screen.Activity)
                 }
                 Box(Modifier.width(CENTER_GAP))
-                SideTab("You", Doodle.Home, current == Screen.Account, modifier = Modifier.width(sideWidth)) {
+                SideTab("You", Doodle.User, current == Screen.Account, modifier = Modifier.width(sideWidth)) {
                     if (current != Screen.Account) haptics.tick(); app.reset(Screen.Account)
                 }
             }
