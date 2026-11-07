@@ -666,3 +666,13 @@ reduce motion.
       refresh read the old profile before the (often cold, 3–6 s) setProfile finished, then "server copy wins" put it
       back. Now refresh skips the profile while a write is in flight (`profileWrites`), and the write's own response is
       applied when it's the latest. The name field only accepts what setProfile allows (letters, digits, space ' . -).
+- [~] Share to Fetch It (Nov 7): MainActivity takes `ACTION_SEND image/*` (share sheet label "Fetch it"), downscales like
+      the picker (`downscaleJpeg`) into `SharedPhotos.pending`; App starts a fetch at once, or after onboarding finishes.
+      Images only: Instagram/Pinterest/Chrome often share a link (text), which isn't handled. Builds; not seen on a device.
+- [~] Price history on watches (Nov 7): `lib/pricehistory.ts summarizeHistory` (6 unit tests, 47 total) turns Channel3
+      `GET /v0/price-tracking/history/{id}` (daily points, months back, even before we started tracking; per Channel3
+      product, not pinned to the watched store) into `watches/{id}.history {points ≤30, low, high, lowOn, days, verdict
+      lowest|wait|steady, message}` + `historyAt`, written by watchOffer and by checks at most every 12 h. App: under
+      each live watch a pen sparkline (draws on in 600 ms), dashed target line, dot coloured by verdict, high/low, and
+      Scout's line ("It was $41.99 on Oct 31. I'd wait for a drop."). `npm run test:watch` checks it on the real lamp.
+      **Not deployed yet** (watchOffer, checkWatches, checkWatchesNow).

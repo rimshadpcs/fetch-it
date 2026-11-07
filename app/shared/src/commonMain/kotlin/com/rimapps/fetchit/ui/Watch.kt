@@ -33,6 +33,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import com.rimapps.fetchit.ui.motion.rememberProgress
+import com.rimapps.fetchit.data.WatchHistory
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.foundation.Canvas
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
@@ -208,9 +217,56 @@ private fun WatchNote(w: Watch, tilt: Float, onStop: (() -> Unit)?) {
                 }
             }
         }
+        if (w.watching) w.history?.let { PriceHistory(it, w.targetPrice) }
         if (onStop != null) Text(
             "stop watching", style = body(14.sp, FontWeight.SemiBold, Ink.Muted),
             modifier = Modifier.align(Alignment.End).clip(RoundedCornerShape(999.dp)).clickable(onClick = onStop).padding(horizontal = 10.dp, vertical = 6.dp),
         )
+    }
+}
+
+/**
+ * The last 30 days as a pen line (drawn on left to right), your target as a dashed line, today's price as a dot,
+ * and Scout's call under it: lowest (green), wait (warning red), steady (muted).
+ */
+@Composable
+private fun PriceHistory(h: WatchHistory, target: Double) {
+    val tone = when (h.verdict) { "lowest" -> Ink.Drop; "wait" -> Ink.Warning; else -> Ink.Muted }
+    val draw by rememberProgress(h.points, durationMs = 600)
+    Column(Modifier.fillMaxWidth().padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Canvas(Modifier.weight(1f).height(46.dp)) {
+                val pts = h.points
+                if (pts.size < 2) return@Canvas
+                val lo = minOf(h.low, target); val hi = maxOf(h.high, target)
+                val range = (hi - lo).takeIf { it > 0.01 } ?: 1.0
+                val pad = 5.dp.toPx()
+                fun y(v: Double) = (pad + (1 - (v - lo) / range) * (size.height - 2 * pad)).toFloat()
+                fun x(i: Int) = pad + i * (size.width - 2 * pad) / (pts.size - 1)
+                // Your target.
+                drawLine(
+                    Ink.Grey, Offset(0f, y(target)), Offset(size.width, y(target)), 1.5.dp.toPx(),
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 4.dp.toPx())),
+                )
+                val upTo = ((pts.size - 1) * draw).coerceAtLeast(0f)
+                val line = Path().apply {
+                    moveTo(x(0), y(pts[0]))
+                    for (i in 1..upTo.toInt()) lineTo(x(i), y(pts[i]))
+                    val f = upTo - upTo.toInt()
+                    if (f > 0f && upTo.toInt() + 1 < pts.size) {
+                        val a = upTo.toInt()
+                        lineTo(x(a) + (x(a + 1) - x(a)) * f, y(pts[a]) + (y(pts[a + 1]) - y(pts[a])) * f)
+                    }
+                }
+                drawPath(line, Ink.Ink, style = Stroke(2.4.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+                if (draw >= 1f) drawCircle(tone, 4.dp.toPx(), Offset(x(pts.lastIndex), y(pts.last())))
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Text(money(h.high, h.currency), style = serif(13.sp, Ink.Grey))
+                Text("${h.days} days", style = body(11.sp, FontWeight.SemiBold, Ink.LightGrey))
+                Text(money(h.low, h.currency), style = serif(13.sp, Ink.Grey))
+            }
+        }
+        Text(h.message, style = hand(18.sp, tone))
     }
 }

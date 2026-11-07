@@ -7,6 +7,7 @@ import { db, userDoc } from "../lib/db.js";
 import type { OfferClaim } from "../lib/sign.js";
 import { money } from "../rules.js";
 import { fetchLiveOffer } from "./live.js";
+import { summarizeHistory, type HistorySummary } from "../lib/pricehistory.js";
 import { clients, requireUid, secrets, startPurchase, verifyOffer, type PurchaseResponse } from "./purchase.js";
 
 export interface WatchDoc {
@@ -27,6 +28,9 @@ export interface WatchDoc {
   channel3Tracking: string;
   purchaseId: string | null;
   purchaseStatus: string | null;
+  /** Last 30 days of Channel3 price history, summarised (sparkline + buy-now-or-wait); refreshed ≤ every 12 h. */
+  history?: HistorySummary | null;
+  historyAt?: Timestamp | null;
   triggeredAt: Timestamp | null;
   createdAt: FieldValue | Timestamp;
   updatedAt: FieldValue | Timestamp;
@@ -46,6 +50,18 @@ const watchActivity = (uid: string, watchId: string, w: Partial<WatchDoc>, statu
     imageUrl: w.imageUrl ?? null,
     createdAt: FieldValue.serverTimestamp(),
   });
+
+const HISTORY_EVERY_MS = 12 * 60 * 60 * 1000;
+
+/** Fetch + summarise the product's price history onto the watch. Best effort: a failure never blocks the watch. */
+async function refreshHistory(c3: ReturnType<ReturnType<typeof clients>["c3"]>, ref: DocumentReference, productId: string, now: number | null) {
+  try {
+    const { history } = await c3.priceHistory(productId);
+    await ref.update({ history: summarizeHistory(history ?? [], now), historyAt: FieldValue.serverTimestamp() });
+  } catch (e) {
+    logger.warn("Channel3 price history failed", { productId, message: (e as Error).message });
+  }
+}
 
 /** Default place for watch purchases: the one marked default, else the only one. */
 async function defaultPlaceId(uid: string): Promise<string> {
@@ -103,6 +119,7 @@ export const watchOffer = onCall<{ offerId: string; targetPrice: number; size?: 
       updatedAt: FieldValue.serverTimestamp(),
     };
     await ref.set(watch);
+    await refreshHistory(c3, ref, claim.productId, live.price);
     const now = live.price === null ? "not listed right now" : `now ${money(live.price, live.currency)}`;
     await watchActivity(uid, ref.id, watch, "watching", `Watching for ${money(targetPrice, live.currency)} or less (${now}).`, live.price);
     return { watchId: ref.id, currentPrice: live.price, targetPrice, currency: live.currency, channel3Tracking: tracking };
@@ -140,8 +157,10 @@ export interface WatchCheck {
 }
 
 async function checkWatch(uid: string, ref: DocumentReference, w: WatchDoc): Promise<WatchCheck> {
-  const live = await fetchLiveOffer(clients().c3(uid), w);
+  const c3 = clients().c3(uid);
+  const live = await fetchLiveOffer(c3, w);
   await ref.update({ lastPrice: live.price, lastCheckedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+  if (!w.historyAt || Date.now() - w.historyAt.toMillis() > HISTORY_EVERY_MS) await refreshHistory(c3, ref, w.productId, live.price);
   const result: WatchCheck = { uid, watchId: ref.id, title: w.title, price: live.price, targetPrice: w.targetPrice, triggered: false };
   if (live.price === null || live.price > w.targetPrice + 1e-9) return result;
 

@@ -26,7 +26,13 @@ class SharedCommonTest {
                "size": {"nullValue": null}, "placeId": {"stringValue": "home"}, "startPrice": {"doubleValue": 42.99},
                "lastPrice": {"doubleValue": 39.5}, "lastCheckedAt": {"timestampValue": "2026-11-07T18:30:00Z"},
                "channel3Tracking": {"stringValue": "active"}, "purchaseId": {"nullValue": null},
-               "createdAt": {"timestampValue": "2026-11-07T18:30:00Z"}, "updatedAt": {"timestampValue": "2026-11-07T18:30:00Z"}
+               "createdAt": {"timestampValue": "2026-11-07T18:30:00Z"}, "updatedAt": {"timestampValue": "2026-11-07T18:30:00Z"},
+               "historyAt": {"timestampValue": "2026-11-07T18:30:00Z"},
+               "history": {"mapValue": {"fields": {
+                 "points": {"arrayValue": {"values": [{"integerValue": "67"}, {"doubleValue": 41.99}]}},
+                 "low": {"doubleValue": 41.99}, "high": {"integerValue": "67"}, "lowOn": {"stringValue": "2026-10-31"},
+                 "days": {"integerValue": "30"}, "verdict": {"stringValue": "wait"},
+                 "message": {"stringValue": "It was $41.99 on Oct 31. I'd wait for a drop."}, "currency": {"stringValue": "USD"}}}}
              }}
             """,
         ).jsonObject
@@ -35,6 +41,8 @@ class SharedCommonTest {
         assertEquals(30.0, w.targetPrice)
         assertEquals(true, w.watching)
         assertEquals(true, w.dropped)
+        assertEquals(listOf(67.0, 41.99), w.history?.points)
+        assertEquals("wait", w.history?.verdict)
     }
 
     @Test

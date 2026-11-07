@@ -57,6 +57,11 @@ test("watchOffer creates a watch on the default place, with an activity entry", 
   console.log(`   watching at $30, now ${result.currentPrice}`);
   const acts = await user.collection("activity").where("watchId", "==", watchId).get();
   assert.equal(acts.size, 1);
+  // Channel3 has months of daily prices for this lamp: the 30-day summary is on the watch.
+  const h = w.history;
+  assert.ok(h && h.points.length >= 2, JSON.stringify(h));
+  assert.ok(["lowest", "wait", "steady"].includes(h.verdict));
+  console.log(`   history: ${h.points.length} days, low ${h.low}, high ${h.high}, ${h.verdict}: ${h.message}`);
 });
 
 test("watching the same item again changes the target on the same watch", async () => {

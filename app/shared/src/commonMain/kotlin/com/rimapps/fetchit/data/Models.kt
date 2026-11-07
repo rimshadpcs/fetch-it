@@ -191,11 +191,26 @@ data class Watch(
     val lastCheckedAt: Long? = null,
     val purchaseId: String? = null,
     val purchaseStatus: String? = null,
+    /** Last 30 days of Channel3 price history, summarised by the backend (null until the first check). */
+    val history: WatchHistory? = null,
 ) {
     val watching get() = status == "watching"
     /** Lower now than when watching started. */
     val dropped get() = lastPrice != null && startPrice != null && lastPrice < startPrice - 0.005
 }
+
+/** One price per day (oldest first) + Scout's call: "lowest" (buy now), "wait" (it was cheaper), "steady". */
+@Serializable
+data class WatchHistory(
+    val points: List<Double> = emptyList(),
+    val low: Double = 0.0,
+    val high: Double = 0.0,
+    val lowOn: String = "",
+    val days: Int = 0,
+    val verdict: String = "steady",
+    val message: String = "",
+    val currency: String = "USD",
+)
 
 @Serializable
 data class WatchStarted(val watchId: String = "", val currentPrice: Double? = null, val targetPrice: Double = 0.0, val currency: String = "USD")
