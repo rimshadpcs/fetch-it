@@ -196,6 +196,10 @@ private fun Bought(app: AppState, p: Purchase) {
             style = body(14.sp, color = Ink.NavGrey), textAlign = TextAlign.Center, maxLines = 2, modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
         )
         Text("Demo store · sandbox", style = hand(17.sp, Ink.Muted), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+        Text(
+            "what goes with it? ›", style = hand(20.sp), textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().clickable { app.go(Screen.Order(p.purchaseId)) }.padding(vertical = 6.dp),
+        )
         app.rules?.let { r ->
             val left = r.monthlyBudget - app.monthToDate
             PaperNote(Modifier.padding(horizontal = 22.dp, vertical = 16.dp).fillMaxWidth()) {

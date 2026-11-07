@@ -23,6 +23,7 @@ export const RATE_LIMITS = {
   findSimilar: { hour: 30 },
   purchaseOffer: { hour: 20 },
   linkPhoto: { hour: 30 },
+  completeLook: { hour: 20 },
 } satisfies Record<string, { hour?: number; day?: number }>;
 export type LimitedAction = keyof typeof RATE_LIMITS;
 

@@ -104,6 +104,7 @@ fun OrderScreen(app: AppState, screen: Screen.Order) {
                 }
             }
             if (o != null) OrderRoute(o, o.items.firstOrNull()?.imageUrl ?: first?.imageUrl)
+            if (o != null && o.status != "cancelled" && o.refund == null) GoesWellWith(app, screen.purchaseId)
             Text("timeline", style = hand(22.sp, Ink.Muted))
             PaperNote(Modifier.fillMaxWidth(), tilt = 0f) {
                 if (timeline.isEmpty()) RunningDog(60.dp)

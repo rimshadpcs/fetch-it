@@ -47,6 +47,9 @@ class FetchApi(val firebase: Firebase = Firebase(httpClient())) {
     /** A shared link (Pinterest pin, store page) → the photo it points at, ready for [fetchItem]. */
     suspend fun linkPhoto(text: String): Pair<ByteArray, String> =
         firebase.call("linkPhoto", buildJsonObject { put("text", text) }).to<LinkPhoto>().let { Base64.decode(it.imageBase64) to it.source }
+    /** "Goes well with" for a bought thing: up to 3 ideas, 2 signed live offers each (cached server-side ~20 h). */
+    suspend fun completeLook(purchaseId: String): List<LookGroup> =
+        firebase.call("completeLook", buildJsonObject { put("purchaseId", purchaseId) }).to<LookResponse>().groups
     suspend fun stopWatch(watchId: String) { firebase.call("stopWatch", buildJsonObject { put("watchId", watchId) }) }
     suspend fun setRules(rules: HouseRules): HouseRules = firebase.call("setRules", json.encodeToJsonElement(rules)).to()
 

@@ -76,6 +76,8 @@ private val LABEL = mapOf(
     "failed" to "Failed", "refunded" to "Refunded", "placed" to "Ordered", "confirmed" to "Confirmed",
     "shipped" to "Shipped", "delivered" to "Delivered", "cancelled" to "Cancelled", "linked" to "PayPal linked",
     "watching" to "Watching", "triggered" to "Price dropped", "cancelling" to "Cancelling", "cancel_failed" to "Couldn't cancel",
+    "dispute_created" to "Dispute opened", "dispute_updated" to "Dispute updated", "dispute_resolved" to "Dispute closed",
+    "unlinked" to "PayPal unlinked", "payment_denied" to "Payment denied",
 )
 
 private fun group(e: ActivityEntry) = when (e.status) {
@@ -176,13 +178,15 @@ private fun ActivityCard(app: AppState, e: ActivityEntry, tilt: Float) {
                 val why = e.reasons.filter { !it.pass }.joinToString(". ") { it.message }
                 Text(if (why.isNotBlank() && e.status != "completed") "$why. ${e.summary}" else e.summary, style = body(13.sp, color = Ink.Muted))
                 if (e.retailer != null && e.type != "paypal") Text("${e.retailer} · demo store · sandbox", style = body(11.sp, color = Ink.Grey))
+                if (e.summarizedBy != null) Text("read from PayPal with the PayPal Agent Toolkit", style = body(11.sp, color = Ink.Grey))
             }
         }
         when {
             e.status == "needs_approval" -> PillButton("Review", height = 44.dp, onClick = { app.go(Screen.Approve(e.purchaseId!!)) })
             e.status == "blocked" -> PillButton("Change rule", dark = false, height = 44.dp, onClick = { app.go(changeRuleTarget(e.reasons)) })
+            e.status == "unlinked" && !app.user.paypalLinked -> PillButton("Link PayPal again", height = 44.dp, onClick = { app.go(Screen.LinkPayPal) })
             // Paid: the order (and, until it ships, Cancel order).
-            e.purchaseId != null && (e.type == "order" || e.status == "completed") -> PillButton(
+            e.purchaseId != null && (e.type == "order" || e.type == "dispute" || e.status == "completed") -> PillButton(
                 if (e.status in setOf("completed", "placed", "confirmed")) "Order · cancel" else "Order details",
                 dark = false, height = 44.dp, onClick = { app.go(Screen.Order(e.purchaseId)) },
             )

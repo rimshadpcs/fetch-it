@@ -17,3 +17,5 @@ export { setProfile, setRules } from "./settings.js";
 export { addPlace, deletePlace, setDefaultPlace } from "./places.js";
 export { saveItem, savedOffer } from "./saved.js";
 export { registerPushToken } from "./push.js";
+export { paypalWebhook } from "./webhooks/paypalWebhook.js";
+export { completeLook } from "./fetch/completeLook.js";

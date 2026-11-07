@@ -272,6 +272,33 @@ export class PayPal {
     );
   }
 
+  /**
+   * PayPal's own check of a webhook delivery (transmission headers + our webhook id + the event as sent).
+   * True only for verification_status SUCCESS.
+   */
+  async verifyWebhook(headers: Record<string, string | undefined>, webhookId: string, event: unknown): Promise<boolean> {
+    const h = (k: string) => headers[k] ?? "";
+    const res = await this.request<{ verification_status?: string }>("POST", "/v1/notifications/verify-webhook-signature", {
+      auth_algo: h("paypal-auth-algo"),
+      cert_url: h("paypal-cert-url"),
+      transmission_id: h("paypal-transmission-id"),
+      transmission_sig: h("paypal-transmission-sig"),
+      transmission_time: h("paypal-transmission-time"),
+      webhook_id: webhookId,
+      webhook_event: event,
+    });
+    return res.verification_status === "SUCCESS";
+  }
+
+  /** Register (or list) our webhook listener for the given event types. */
+  createWebhook(url: string, eventTypes: string[]) {
+    return this.request<{ id: string; url: string }>("POST", "/v1/notifications/webhooks", { url, event_types: eventTypes.map((name) => ({ name })) });
+  }
+
+  listWebhooks() {
+    return this.request<{ webhooks: { id: string; url: string; event_types: { name: string }[] }[] }>("GET", "/v1/notifications/webhooks");
+  }
+
   getOrder(orderId: string) {
     return this.request<Record<string, unknown>>("GET", `/v2/checkout/orders/${encodeURIComponent(orderId)}`);
   }

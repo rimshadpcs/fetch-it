@@ -213,6 +213,12 @@ data class WatchHistory(
 )
 
 @Serializable
+data class LookGroup(val label: String = "", val why: String = "", val offers: List<Offer> = emptyList())
+
+@Serializable
+data class LookResponse(val groups: List<LookGroup> = emptyList())
+
+@Serializable
 data class LinkPhoto(val imageBase64: String = "", val source: String = "")
 
 @Serializable
@@ -266,6 +272,8 @@ data class ActivityEntry(
     val placeLabel: String? = null,
     val promisedDeliveryDate: String? = null,
     val trackingNumber: String? = null,
+    /** Set when Scout wrote [summary] from PayPal's own data (dispute read with the PayPal Agent Toolkit). */
+    val summarizedBy: String? = null,
     /** Epoch millis (Firestore timestampValue). */
     val createdAt: Long = 0,
 )
