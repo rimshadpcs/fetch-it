@@ -8,6 +8,8 @@ import com.rimapps.fetchit.platform.PhotoFiles
 import com.rimapps.fetchit.data.json
 import kotlinx.serialization.Serializable
 import com.rimapps.fetchit.data.SavedItem
+import com.rimapps.fetchit.data.Watch
+import com.rimapps.fetchit.data.WatchStarted
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -55,6 +57,8 @@ sealed interface Screen {
     data class Snaps(val open: String? = null) : Screen
     /** You → Saved: hearted results, each buyable at its live price. */
     data object Saved : Screen
+    /** You → Price watches: what's being watched, the target, the last checked price; stop one. */
+    data object Watches : Screen
     /** You & settings → Saved places: list, default, delete. */
     data object Places : Screen
     /** Add (placeId null) or edit a saved place. */
@@ -232,6 +236,7 @@ class AppState(val scope: CoroutineScope, val api: FetchApi = FetchApi()) {
             activity = api.activity()
             activityLoaded = true
             saved = api.saved()
+            watches = api.watches()
         }
     }
 
@@ -273,6 +278,24 @@ class AppState(val scope: CoroutineScope, val api: FetchApi = FetchApi()) {
     fun toggleSavedById(item: SavedItem) = scope.launch {
         runCatching { api.unsave(item.id); saved = api.saved() }
             .onFailure { saved = api.saved() }
+    }
+
+    /** Price watches (users/{uid}/watches), newest change first. */
+    var watches by mutableStateOf<List<Watch>>(emptyList())
+
+    /** The live watch on this item, if any (one per item: watching again changes the target). */
+    fun watchFor(o: Offer) = watches.firstOrNull { it.watching && it.productId == o.productId && it.merchant == o.merchant }
+
+    suspend fun startWatch(o: Offer, target: Double, size: String?, placeId: String?): Result<WatchStarted> =
+        runCatching { api.watchOffer(o.offerId, target, size, placeId) }
+            .onSuccess { runCatching { watches = api.watches() }; refreshActivity() }
+
+    suspend fun stopWatch(w: Watch): Result<Unit> {
+        val before = watches
+        watches = watches.map { if (it.id == w.id) it.copy(status = "stopped") else it }
+        return runCatching { api.stopWatch(w.id) }
+            .onSuccess { runCatching { watches = api.watches() }; refreshActivity() }
+            .onFailure { watches = before }
     }
 
     /** False until Activity has loaded once (Activity shows blurred placeholder notes until then). */

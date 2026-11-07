@@ -82,7 +82,8 @@ KMP app ──Firebase Auth──▶ Cloud Functions (TypeScript)
 | `purchaseOffer` ✅ | `{offerId, size?, placeId, requestId}` (requestId = one per Buy tap = purchase id; a repeat returns the same purchase and waits for its outcome) → live price → rules → BLOCKED / NEEDS_APPROVAL (FCM placeholder) / AUTO_BUY (streams decision, 5 s undo, then vault charge) |
 | `approvePurchase` ✅ | `{purchaseId, allowCategory?}` after the fingerprint: re-checks live price + hard rules, charges right away; allowCategory adds the item's root category to the rules |
 | `undoPurchase` ✅ | `{purchaseId}`: undo an auto-buy inside the window (nothing charged) or decline an approval |
-| `watchOffer` ✅ | `{offerId, targetPrice, size?, placeId?}` → `users/{uid}/watches/{id}` + Channel3 price tracking |
+| `watchOffer` ✅ | `{offerId, targetPrice, size?, placeId?}` → `users/{uid}/watches/{id}` + Channel3 price tracking; one live watch per item (again = new target, startPrice kept) |
+| `stopWatch` ✅ | `{watchId}`: a watching watch → `stopped` + activity; anything else refused |
 | `checkWatches` ✅ | scheduled hourly: live price ≤ target → "Price dropped" activity → same purchase path (rules apply) |
 | `checkWatchesNow` ✅ | callable "check now" for the caller's own watches (how the emulator test runs a check) |
 | `findSimilar` ✅ | `{offerId, maxPrice?}`: "More like this" / "Find cheaper" via Channel3 `/v1/similar`, signed offers |
@@ -643,3 +644,10 @@ reduce motion.
       "2 new · 1 cheaper since Nov 5" (or "Nothing new"), tapes "new!" on new matches and strikes through the old price
       on cheaper ones. No server storage and no automatic re-checks (decided Nov 7). Privacy text in You updated.
       Builds; not yet seen on a device.
+- [~] Price watches in the app (Nov 7): Results has a "watch price" pill left of Scout's peek (black "watching ≤ $X" once
+      watched) → `WatchSheet` (ui/Watch.kt): target as an AmountField (default ~10% under, chips 10/20/30% off; at or
+      over today's price is refused, over the per-item limit warns it'll still ask), uses the picked size + ship-to
+      place; Change target / Stop watching when already watched. Buy disarms while the sheet is open. You → Price
+      watches (`WatchesScreen`): live watches with target, last price, stop; recent "price dropped" ones below.
+      `npm run test:watch` (emulators + Channel3 detail, 5 tests, nothing charged). **watchOffer change + stopWatch
+      not deployed yet**; not seen on a device.

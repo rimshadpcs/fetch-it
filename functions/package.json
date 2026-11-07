@@ -15,7 +15,8 @@
     "test:places": "node --test test/places.mjs",
     "test:category": "node --test test/category.mjs",
     "test:saved": "node --test test/saved.mjs",
-    "test": "npm run build && node --test test/*.test.mjs"
+    "test": "npm run build && node --test test/*.test.mjs",
+    "test:watch": "node --test test/watch.mjs"
   },
   "engines": {
     "node": "22"

@@ -77,7 +77,10 @@ export const watchOffer = onCall<{ offerId: string; targetPrice: number; size?: 
         return "failed";
       });
 
-    const ref = userDoc(uid).collection("watches").doc();
+    // One watch per item: watching it again just changes the target (and the place / size).
+    const existing = await userDoc(uid).collection("watches")
+      .where("status", "==", "watching").where("productId", "==", claim.productId).where("merchant", "==", claim.merchant).limit(1).get();
+    const ref = existing.empty ? userDoc(uid).collection("watches").doc() : existing.docs[0].ref;
     const watch: WatchDoc = {
       status: "watching",
       productId: claim.productId,
@@ -89,20 +92,40 @@ export const watchOffer = onCall<{ offerId: string; targetPrice: number; size?: 
       currency: live.currency,
       size: size ?? null,
       placeId: place,
-      startPrice: live.price,
+      startPrice: existing.empty ? live.price : ((existing.docs[0].data().startPrice as number | null) ?? live.price),
       lastPrice: live.price,
       lastCheckedAt: Timestamp.now(),
       channel3Tracking: tracking,
       purchaseId: null,
       purchaseStatus: null,
       triggeredAt: null,
-      createdAt: FieldValue.serverTimestamp(),
+      createdAt: existing.empty ? FieldValue.serverTimestamp() : (existing.docs[0].data().createdAt as Timestamp),
       updatedAt: FieldValue.serverTimestamp(),
     };
     await ref.set(watch);
     const now = live.price === null ? "not listed right now" : `now ${money(live.price, live.currency)}`;
     await watchActivity(uid, ref.id, watch, "watching", `Watching for ${money(targetPrice, live.currency)} or less (${now}).`, live.price);
     return { watchId: ref.id, currentPrice: live.price, targetPrice, currency: live.currency, channel3Tracking: tracking };
+  },
+);
+
+/** Stop watching (only a watch that's still watching; a triggered one has already gone to the rules). */
+export const stopWatch = onCall<{ watchId: string }>(
+  { cors: true, enforceAppCheck: ENFORCE_APP_CHECK },
+  async (request) => {
+    const uid = requireUid(request.auth?.uid);
+    const watchId = request.data?.watchId;
+    if (typeof watchId !== "string" || !/^[A-Za-z0-9]{1,64}$/.test(watchId)) throw new HttpsError("invalid-argument", "watchId is required.");
+    const ref = userDoc(uid).collection("watches").doc(watchId);
+    const w = await db.runTransaction(async (tx) => {
+      const cur = (await tx.get(ref)).data() as WatchDoc | undefined;
+      if (!cur) throw new HttpsError("not-found", "No such watch.");
+      if (cur.status !== "watching") throw new HttpsError("failed-precondition", `This watch is already ${cur.status}.`);
+      tx.update(ref, { status: "stopped", updatedAt: FieldValue.serverTimestamp() });
+      return cur;
+    });
+    await watchActivity(uid, watchId, w, "stopped", `Stopped watching (target was ${money(w.targetPrice, w.currency)}).`, w.lastPrice);
+    return { watchId, status: "stopped" };
   },
 );
 

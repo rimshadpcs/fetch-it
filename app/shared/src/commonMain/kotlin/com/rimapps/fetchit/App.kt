@@ -2,6 +2,7 @@ package com.rimapps.fetchit
 
 import com.rimapps.fetchit.ui.SnapsScreen
 import com.rimapps.fetchit.ui.SavedScreen
+import com.rimapps.fetchit.ui.WatchesScreen
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideOutVertically
@@ -109,6 +110,7 @@ fun App(register: ((() -> Boolean) -> Unit)? = null) {
                                     Screen.Account -> AccountScreen(app)
                                     Screen.Places -> PlacesScreen(app)
                                     Screen.Saved -> SavedScreen(app)
+                                    Screen.Watches -> WatchesScreen(app)
                                     is Screen.Snaps -> SnapsScreen(app, screen)
                                     is Screen.PlaceEdit -> PlaceEditScreen(app, screen)
                                     Screen.MotionLab -> MotionLabScreen(app)

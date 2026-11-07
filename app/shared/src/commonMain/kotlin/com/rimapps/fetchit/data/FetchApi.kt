@@ -38,6 +38,13 @@ class FetchApi(val firebase: Firebase = Firebase(httpClient())) {
     suspend fun savedOffer(savedId: String): Offer = firebase.call("savedOffer", buildJsonObject { put("savedId", savedId) }).to()
     /** "More matches": look-alikes of an offer (Channel3 similar, one search credit). */
     suspend fun findSimilar(offerId: String): List<Offer> = firebase.call("findSimilar", buildJsonObject { put("offerId", offerId) }).to<SimilarResponse>().offers
+    /** Watch an offer: bought through the house rules once it's at or under [targetPrice] (checked hourly). */
+    suspend fun watchOffer(offerId: String, targetPrice: Double, size: String?, placeId: String?): WatchStarted =
+        firebase.call("watchOffer", buildJsonObject {
+            put("offerId", offerId); put("targetPrice", targetPrice)
+            size?.let { put("size", it) }; placeId?.let { put("placeId", it) }
+        }).to()
+    suspend fun stopWatch(watchId: String) { firebase.call("stopWatch", buildJsonObject { put("watchId", watchId) }) }
     suspend fun setRules(rules: HouseRules): HouseRules = firebase.call("setRules", json.encodeToJsonElement(rules)).to()
 
     /** Only the fields given are changed (sizes: all four are sent, null clears one). */
@@ -115,6 +122,9 @@ class FetchApi(val firebase: Firebase = Firebase(httpClient())) {
     suspend fun profile(): Profile? = firebase.getDoc("${users()}/profile/main")?.to()
     suspend fun saved(): List<SavedItem> =
         firebase.listDocs("${users()}/saved", orderBy = "savedAt desc").map { it.to() }
+
+    suspend fun watches(): List<Watch> =
+        firebase.listDocs("${users()}/watches", orderBy = "updatedAt desc").map { it.to() }
 
     suspend fun places(): List<Place> =
         firebase.listDocs("${users()}/places").map { it.withPlaceId().to() }

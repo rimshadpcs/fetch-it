@@ -42,6 +42,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -401,13 +402,14 @@ private fun ResultsFor(app: AppState, s: FetchSession, r: FetchResponse) {
     var placeId by remember { mutableStateOf(app.defaultPlace?.placeId) }
     val place = app.savedPlaces.firstOrNull { it.placeId == placeId } ?: app.defaultPlace
     var picking by remember { mutableStateOf(false) }
+    var watching by remember { mutableStateOf(false) }
     // Buy only counts a press that starts after this screen has been on the display for a moment: a tap aimed
     // at the screen underneath (the Fetch "+" sits where Buy lands) must never buy. Measured from the first
     // draw, not composition, because a slow device can compose long before it shows anything. Closing the
     // place sheet re-arms it the same way (the sheet's rows sit above Buy).
     var drawn by remember { mutableStateOf(false) }
     var armed by remember { mutableStateOf(false) }
-    LaunchedEffect(drawn, picking) { armed = false; if (drawn && !picking) { delay(800); armed = true } }
+    LaunchedEffect(drawn, picking, watching) { armed = false; if (drawn && !picking && !watching) { delay(800); armed = true } }
 
     // Scout (peeking over the Buy bar) looks wherever the user last tapped.
     var rootOrigin by remember { mutableStateOf(Offset.Zero) }
@@ -538,11 +540,16 @@ private fun ResultsFor(app: AppState, s: FetchSession, r: FetchResponse) {
                 .padding(start = 16.dp, end = 16.dp, top = 30.dp, bottom = 30.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            ScoutPeek(
-                54.dp, Modifier.align(Alignment.End).padding(end = 18.dp)
-                    .onGloballyPositioned { c -> scoutCenter = c.positionInRoot() + Offset(c.size.width / 2f, c.size.height / 2f) },
-                showing = 0.6f, lookAt = scoutLook, glance = false,
-            )
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+                // Watch the price instead of buying now (one watch per item; tapping again changes or stops it).
+                if (offer != null) WatchChip(app.watchFor(offer), onClick = { watching = true }, modifier = Modifier.padding(bottom = 4.dp))
+                Spacer(Modifier.weight(1f))
+                ScoutPeek(
+                    54.dp, Modifier.padding(end = 18.dp)
+                        .onGloballyPositioned { c -> scoutCenter = c.positionInRoot() + Offset(c.size.width / 2f, c.size.height / 2f) },
+                    showing = 0.6f, lookAt = scoutLook, glance = false,
+                )
+            }
             val sizes = offer?.sizes.orEmpty()
             if (sizes.isNotEmpty()) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -576,6 +583,7 @@ private fun ResultsFor(app: AppState, s: FetchSession, r: FetchResponse) {
             }
         }
         PlacePickerSheet(app, picking, place?.placeId, onPick = { placeId = it.placeId; picking = false }, onDismiss = { picking = false })
+        WatchSheet(app, watching, offer, size, place?.placeId, onDismiss = { watching = false })
     }
 }
 

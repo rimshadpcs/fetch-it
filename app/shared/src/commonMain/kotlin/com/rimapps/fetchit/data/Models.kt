@@ -172,6 +172,31 @@ data class SavedItem(
     val key get() = "$productId|$merchant"
 }
 
+/** users/{uid}/watches/{id}: buy it (through the house rules) once the live price is at or under [targetPrice]. */
+@Serializable
+data class Watch(
+    val id: String = "",
+    val status: String = "watching",
+    val productId: String = "",
+    val merchant: String = "",
+    val title: String = "",
+    val imageUrl: String? = null,
+    val targetPrice: Double = 0.0,
+    val currency: String = "USD",
+    val size: String? = null,
+    val placeId: String? = null,
+    val startPrice: Double? = null,
+    val lastPrice: Double? = null,
+    val lastCheckedAt: String? = null,
+    val purchaseId: String? = null,
+    val purchaseStatus: String? = null,
+) {
+    val watching get() = status == "watching"
+}
+
+@Serializable
+data class WatchStarted(val watchId: String = "", val currentPrice: Double? = null, val targetPrice: Double = 0.0, val currency: String = "USD")
+
 @Serializable
 data class SimilarResponse(val offers: List<Offer> = emptyList())
 
