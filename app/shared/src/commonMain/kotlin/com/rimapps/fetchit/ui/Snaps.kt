@@ -1,5 +1,6 @@
 package com.rimapps.fetchit.ui
 
+import com.rimapps.fetchit.ui.components.grayPress
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -110,28 +111,17 @@ fun PostageStamp(id: String, modifier: Modifier = Modifier, tilt: Float = 0f, pa
     }
 }
 
-/** A strip of the newest snaps on Fetch: tap one to open it in the album; "see all" opens the album. */
+/** On Fetch, next to the budget chip: the newest stamp and how many snaps there are; opens the album. */
 @Composable
-fun SnapsStrip(app: AppState, modifier: Modifier = Modifier) {
-    if (app.snaps.isEmpty()) return
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("your snaps", style = hand(20.sp, Ink.Muted), modifier = Modifier.weight(1f))
-            Text(
-                "see all ›", style = body(13.sp, FontWeight.SemiBold, Ink.Muted),
-                modifier = Modifier.clip(RoundedCornerShape(999.dp)).clickable { app.go(Screen.Snaps()) }.padding(horizontal = 8.dp, vertical = 6.dp),
-            )
-        }
-        LazyRow(contentPadding = PaddingValues(horizontal = 22.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            items(app.snaps.take(12), key = { it.id }) { snap ->
-                PostageStamp(
-                    snap.id,
-                    Modifier.width(54.dp).clickable(role = Role.Button) { app.go(Screen.Snaps(open = snap.id)) }
-                        .semantics { contentDescription = snap.label ?: "snap" },
-                    tilt = pinTilt(snap.id.hashCode(), 3f), perf = 3.dp,
-                )
-            }
-        }
+fun SnapsChip(app: AppState, modifier: Modifier = Modifier) {
+    val newest = app.snaps.firstOrNull() ?: return
+    Row(
+        modifier.height(40.dp).grayPress({ app.go(Screen.Snaps()) }).background(Ink.Pill).padding(start = 8.dp, end = 14.dp)
+            .semantics(mergeDescendants = true) { contentDescription = "Your snaps, ${app.snaps.size}" },
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        PostageStamp(newest.id, Modifier.width(24.dp), tilt = -6f, paper = Ink.Pill, perf = 2.dp)
+        Text(if (app.snaps.size == 1) "1 snap" else "${app.snaps.size} snaps", style = body(15.sp, FontWeight.SemiBold, Ink.Muted), maxLines = 1)
     }
 }
 

@@ -140,20 +140,22 @@ fun FetchScreen(app: AppState) {
     MainScaffold {
         Column(Modifier.fillMaxSize()) {
             Text("What should I fetch?", style = hand(32.sp), modifier = Modifier.padding(start = 24.dp, end = 22.dp, top = 58.dp))
-            // Budget chip: a shortcut to the house rules.
-            app.budgetLeft()?.let { left ->
-                Row(
-                    Modifier.padding(start = 20.dp, top = 6.dp).height(40.dp).grayPress({ app.go(Screen.Rules(RuleFocus.Budget)) }).background(Ink.Pill).padding(horizontal = 14.dp)
-                        .semantics(mergeDescendants = true) {},
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    CountUpMoney(left, serif(19.sp, Ink.Ink), from = null)
-                    Text(" left this month  ›", style = body(15.sp, FontWeight.SemiBold, Ink.Muted))
+            // Budget chip (→ house rules) and, beside it, the snaps chip (→ the album).
+            Row(Modifier.horizontalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                app.budgetLeft()?.let { left ->
+                    Row(
+                        Modifier.height(40.dp).grayPress({ app.go(Screen.Rules(RuleFocus.Budget)) }).background(Ink.Pill).padding(horizontal = 14.dp)
+                            .semantics(mergeDescendants = true) {},
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        CountUpMoney(left, serif(19.sp, Ink.Ink), from = null)
+                        Text(" left this month", style = body(15.sp, FontWeight.SemiBold, Ink.Muted), maxLines = 1)
+                    }
                 }
+                SnapsChip(app)
             }
             Segmented(listOf("Snap", "Upload"), mode, { it }, { mode = it }, Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 12.dp))
-            // Earlier photos, ready to search again.
-            if (session == null) SnapsStrip(app, Modifier.padding(bottom = 6.dp))
+
             Box(Modifier.fillMaxWidth().height(1.dp).background(Ink.Divider))
 
             val ready = session?.response?.takeIf { !session.loading && session.error == null && it.status in setOf("results", "choose") }
