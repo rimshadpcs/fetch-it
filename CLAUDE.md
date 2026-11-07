@@ -240,7 +240,11 @@ size, color, strokeWidth)`: ~4 grid units at 24 dp (set default 3.4), 4.6 when a
 inactive. No Material icons. Adding one: copy its `<path d>` values from `npm pack @oreo-design/doodle-icons`.
 One exception, asked for Nov 7: the Fetch button's camera is animated (`BoilingCamera` in icons/BoilingDoodle.kt): its
 strokes draw on with the set's animated-SVG timings, then it "boils" forever (points displaced by smooth noise whose
-seed steps 6 times per 0.86 s, ±2 grid units, like the SVG's feTurbulence/feDisplacementMap). Static under reduce motion.
+seed steps 6 times per 0.86 s). The noise is the SVG's own feTurbulence ported from the SVG 1.1 spec (`SvgTurbulence`,
+fractalNoise 0.055, 2 octaves, seeds 1–6); stroke points are moved where feDisplacementMap scale 4 shows them (inverse,
+6 fixed-point steps), stroke 3.4. Checked against headless Chrome's render of the SVG: per-pixel port matches, the drawn
+line sits within ~0.1 grid unit. The filter also thins/thickens strokes a little, which a moved line can't. Static under
+reduce motion.
 
 ### Components (`shared/.../ui/components/`)
 - `Modifier.pressScale(source, Press.PILL 0.96 | GRAY 0.95 | ROUND 0.90, tilt)`: 80 ms sink, spring back with

@@ -19,16 +19,15 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.rimapps.fetchit.ui.motion.LocalReduceMotion
 import com.rimapps.fetchit.ui.motion.rememberClock
-import kotlin.math.cos
-import kotlin.math.sin
 
 // The set's animated variant, recreated in Compose for one icon (the Fetch button's camera): each stroke draws on in
-// order (the SVG's timings and cubic-bezier(.65,.05,.36,1)), then the line keeps "boiling": an feTurbulence +
-// feDisplacementMap wobble whose noise seed steps 6 times per 0.86 s, forever. Static with reduce motion.
+// order (the SVG's timings and cubic-bezier(.65,.05,.36,1)), then the line keeps "boiling": the SVG's own feTurbulence
+// (ported, SvgTurbulence) displacing the strokes like feDisplacementMap, seed stepping 1…6 every 0.86 s, forever.
+// Static with reduce motion.
 
 private val DRAW_EASE = CubicBezierEasing(0.65f, 0.05f, 0.36f, 1f)
 private const val BOIL_STEP_MS = 143L // 0.86 s / 6 seeds
-private const val BOIL = 2f // ± grid units (displacement scale 4 → ±2)
+private const val SCALE = 4.0 // feDisplacementMap scale
 
 /** Start delay and duration (ms) of each stroke's draw-on, in path order. */
 private val CAMERA_TIMING = listOf(0 to 700, 490 to 310, 700 to 150)
@@ -44,20 +43,34 @@ private fun sample(d: String): Sampled {
     return Sampled((0..n).map { m.getPosition(m.length * it / n) }, isDot = false)
 }
 
-/** Smooth noise displacement for a point, different for each seed (stands in for the SVG's fractal noise). */
-private fun boil(p: Offset, seed: Int): Offset {
-    val s = seed * 1.913f
-    val dx = sin(p.x * 0.31f + s) * cos(p.y * 0.23f - s * 0.7f) + 0.5f * sin(p.y * 0.57f + s * 1.3f)
-    val dy = cos(p.y * 0.29f + s * 1.1f) * sin(p.x * 0.27f + s * 0.4f) + 0.5f * cos(p.x * 0.61f - s)
-    return Offset(dx, dy) * (BOIL / 1.5f)
+/** The six noises the SVG cycles through (`<animate attributeName="seed" values="1;2;3;4;5;6">`), built once. */
+private val TURBULENCE = (1..6).associateWith { SvgTurbulence(it.toLong()) }
+
+/**
+ * Where a stroke point ends up under `feDisplacementMap scale="4"` over `feTurbulence type="fractalNoise"
+ * baseFrequency="0.055" numOctaves="2"`: the filter shows at pixel q the source from q + 4(noise(q) − ½), so the
+ * line point p appears at the q solving q + d(q) = p. Solved by a few fixed-point steps (the noise is smooth);
+ * against Chrome's render this lands within ~0.1 grid unit of the drawn stroke.
+ */
+private fun boiled(p: Offset, seed: Int): Offset {
+    val t = TURBULENCE.getValue(seed)
+    var x = p.x.toDouble(); var y = p.y.toDouble()
+    repeat(6) {
+        val r = t.fractalNoise(0, x, y, 0.055, 2)
+        val g = t.fractalNoise(1, x, y, 0.055, 2)
+        x = p.x - SCALE * (r - 0.5); y = p.y - SCALE * (g - 0.5)
+    }
+    return Offset(x.toFloat(), y.toFloat())
 }
 
 /** The Fetch button's camera, drawing itself on and then boiling forever. */
 @Composable
-fun BoilingCamera(size: Dp, color: Color, strokeWidth: Float = 4.2f, modifier: Modifier = Modifier) {
+fun BoilingCamera(size: Dp, color: Color, strokeWidth: Float = 3.4f, modifier: Modifier = Modifier) {
     val reduce = LocalReduceMotion.current
     val clock = rememberClock(running = !reduce)
     val paths = remember { Doodle.Camera.paths.map(::sample) }
+    // Each seed's displaced points, worked out once (the noise only changes when the seed steps).
+    val boiled = remember(paths) { (1..6).associateWith { seed -> paths.map { sp -> sp.points.map { boiled(it, seed) } } } }
     Canvas(modifier.size(size)) {
         val t = if (reduce) Long.MAX_VALUE / 4 else clock.value
         val seed = if (reduce) 0 else (t / BOIL_STEP_MS % 6).toInt() + 1
@@ -67,7 +80,7 @@ fun BoilingCamera(size: Dp, color: Color, strokeWidth: Float = 4.2f, modifier: M
                 val (start, dur) = CAMERA_TIMING.getOrElse(i) { 0 to 1 }
                 val f = DRAW_EASE.transform(((t - start).toFloat() / dur).coerceIn(0f, 1f))
                 if (f <= 0f) return@forEachIndexed
-                val pts = sp.points.map { it + if (reduce) Offset.Zero else boil(it, seed) }
+                val pts = if (reduce) sp.points else boiled.getValue(seed)[i]
                 if (sp.isDot) { drawCircle(color, strokeWidth / 2, pts[0]); return@forEachIndexed }
                 val upTo = (f * (pts.size - 1)).toInt().coerceAtLeast(1)
                 val line = Path().apply {
