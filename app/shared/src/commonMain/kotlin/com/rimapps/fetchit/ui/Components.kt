@@ -1,5 +1,6 @@
 package com.rimapps.fetchit.ui
 
+import com.rimapps.fetchit.ui.motion.ScoutPeek
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -113,7 +114,7 @@ fun BackButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
 /** Onboarding header: back, "Step N of 5" chip, 5-segment progress. */
 @Composable
 fun StepHeader(step: Int, total: Int = 5, onBack: (() -> Unit)?) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (onBack != null) BackButton(onBack) else Box(Modifier.size(44.dp))
             Box(Modifier.weight(1f))
@@ -131,8 +132,13 @@ fun StepHeader(step: Int, total: Int = 5, onBack: (() -> Unit)?) {
                 }
             }
         }
+        // Scout's ears and eyes over the top edge of the page.
+        ScoutPeek(58.dp, Modifier.align(Alignment.End).padding(end = 8.dp), showing = 0.55f, delayMs = 300)
     }
 }
+
+/** The shared-shape key for big Scout (Meet your fetcher) → small Scout over the Fetch viewfinder. */
+const val SCOUT_KEY = "scout"
 
 /** Budget bar that fills on first show. */
 @Composable

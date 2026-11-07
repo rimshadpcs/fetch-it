@@ -83,6 +83,11 @@ fun MotionLabScreen(app: AppState) {
                         Text("with a bone", style = hand(17.sp, Ink.Muted))
                     }
                 }
+                Label("ScoutFace / ScoutPeek (eyes glance + blink; right one looks up)")
+                Row(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.Bottom) {
+                    com.rimapps.fetchit.ui.motion.ScoutFace(90.dp)
+                    com.rimapps.fetchit.ui.motion.ScoutPeek(90.dp, showing = 0.55f, lookAt = androidx.compose.ui.geometry.Offset(0f, -1f))
+                }
                 Label("ScoutRunsIn")
                 Box(Modifier.fillMaxWidth().height(110.dp)) { ScoutRunsIn(80.dp, Modifier.align(Alignment.CenterEnd), bone = true) }
 

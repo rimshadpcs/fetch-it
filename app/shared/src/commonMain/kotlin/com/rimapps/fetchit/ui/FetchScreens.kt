@@ -1,5 +1,10 @@
 package com.rimapps.fetchit.ui
 
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.input.pointer.PointerEventPass
+import com.rimapps.fetchit.ui.motion.sharedShape
+import com.rimapps.fetchit.ui.motion.ScoutPeek
 import com.rimapps.fetchit.ui.icons.DoodleIcon
 import com.rimapps.fetchit.ui.icons.Doodle
 import com.rimapps.fetchit.ui.components.PillButton
@@ -146,15 +151,14 @@ fun FetchScreen(app: AppState) {
                     PillButton("Start over", dark = false, height = 52.dp, onClick = { app.session = null })
                 }
             } else if (mode == "Snap") {
-                Column(Modifier.weight(1f).padding(horizontal = 22.dp, vertical = 22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(Modifier.weight(1f).padding(start = 22.dp, end = 22.dp, top = 6.dp, bottom = 22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    // Scout peeks over the top of the viewfinder (big Scout from onboarding shrinks into this).
+                    ScoutPeek(96.dp, Modifier.sharedShape(SCOUT_KEY), showing = 0.6f)
                     Box(
                         Modifier.fillMaxWidth().weight(1f).rotate(-1f).background(Color(0xFF3E3C38)).clickable { photos.takePhoto() },
                         contentAlignment = Alignment.Center,
                     ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Mascot(90.dp)
-                            Text("point me at it", style = hand(24.sp, Ink.White))
-                        }
+                        Text("point me at it", style = hand(24.sp, Ink.White))
                     }
                     Gap(16.dp)
                     Box(Modifier.size(78.dp).shadow(6.dp, CircleShape).roundButton({ photos.takePhoto() }).background(Ink.White), contentAlignment = Alignment.Center) {
@@ -320,7 +324,27 @@ fun ResultsScreen(app: AppState) {
     var armed by remember { mutableStateOf(false) }
     LaunchedEffect(drawn, picking) { armed = false; if (drawn && !picking) { delay(800); armed = true } }
 
-    Box(Modifier.fillMaxSize().dotted()) {
+    // Scout (peeking over the Buy bar) looks wherever the user last tapped.
+    var rootOrigin by remember { mutableStateOf(Offset.Zero) }
+    var lastTap by remember { mutableStateOf<Offset?>(null) }
+    var scoutCenter by remember { mutableStateOf(Offset.Zero) }
+    val scoutLook = lastTap?.let { t ->
+        val d = t - scoutCenter
+        val len = kotlin.math.sqrt(d.x * d.x + d.y * d.y).coerceAtLeast(1f)
+        Offset(d.x / len, d.y / len)
+    }
+    Box(
+        Modifier.fillMaxSize().dotted()
+            .onGloballyPositioned { rootOrigin = it.positionInRoot() }
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val e = awaitPointerEvent(PointerEventPass.Initial) // watch only: never consumes
+                        e.changes.firstOrNull { it.pressed && !it.previousPressed }?.let { lastTap = rootOrigin + it.position }
+                    }
+                }
+            },
+    ) {
         Column(Modifier.fillMaxSize().padding(top = 56.dp)) {
             Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 BackButton({ app.session = null; app.reset(Screen.Fetch) })
@@ -379,6 +403,11 @@ fun ResultsScreen(app: AppState) {
                 .padding(start = 16.dp, end = 16.dp, top = 30.dp, bottom = 30.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            ScoutPeek(
+                54.dp, Modifier.align(Alignment.End).padding(end = 18.dp)
+                    .onGloballyPositioned { c -> scoutCenter = c.positionInRoot() + Offset(c.size.width / 2f, c.size.height / 2f) },
+                showing = 0.6f, lookAt = scoutLook, glance = false,
+            )
             val sizes = offer?.sizes.orEmpty()
             if (sizes.isNotEmpty()) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {

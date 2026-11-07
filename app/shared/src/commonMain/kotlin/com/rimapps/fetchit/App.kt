@@ -147,8 +147,8 @@ private fun screenTransition(from: Screen, to: Screen, reduce: Boolean): Content
             (slideInHorizontally(tween(350)) { it * dir } + fadeIn(tween(250))) togetherWith
                 (slideOutHorizontally(tween(350)) { -it * dir / 3 } + fadeOut(tween(250)))
         }
-        from == Screen.Ready && to == Screen.Fetch ->
-            (slideInVertically(tween(380)) { it } + fadeIn(tween(200))) togetherWith fadeOut(tween(250))
+        // Big Scout shrinks into the small one peeking over the viewfinder (shared bounds): a plain cross-fade around it.
+        from == Screen.Ready && to == Screen.Fetch -> fadeIn(tween(450)) togetherWith fadeOut(tween(450))
         from in photoFlow && to in photoFlow && from != to -> fadeIn(tween(420)) togetherWith fadeOut(tween(420))
         else -> fadeIn(tween(180)) togetherWith fadeOut(tween(120))
     }

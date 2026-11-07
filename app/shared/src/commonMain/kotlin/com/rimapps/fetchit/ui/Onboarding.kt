@@ -1,5 +1,7 @@
 package com.rimapps.fetchit.ui
 
+import com.rimapps.fetchit.ui.motion.sharedShape
+import com.rimapps.fetchit.ui.motion.ScoutPeek
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -96,7 +98,12 @@ fun WelcomeScreen(app: AppState) {
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    Column(Modifier.fillMaxSize().dotted().padding(bottom = 34.dp)) {
+    // Scout peeks up from the bottom edge, glances around, then looks up at the button.
+    var lookUp by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { delay(2600); lookUp = true }
+    Box(Modifier.fillMaxSize().dotted()) {
+    ScoutPeek(230.dp, Modifier.align(Alignment.BottomCenter), showing = 0.5f, lookAt = if (lookUp) Offset(0.15f, -1f) else null, delayMs = 500)
+    Column(Modifier.fillMaxSize().padding(bottom = 92.dp)) {
         Text("Fetch It", style = body(22.sp, color = Ink.LightGrey), modifier = Modifier.align(Alignment.End).padding(top = 58.dp, end = 26.dp))
         Box(Modifier.fillMaxWidth().height(340.dp)) {
             Box(Modifier.offset(36.dp, 30.dp).pinIn(0, tilt = 0f)) {
@@ -107,7 +114,6 @@ fun WelcomeScreen(app: AppState) {
                 Polaroid(null, "striped polo", Modifier.width(170.dp), tilt = 5f, imageHeight = 130.dp, image = Res.drawable.welcome_polo)
                 Tape(Modifier.align(Alignment.TopCenter).offset(y = (-4).dp), rotation = 8f, delayMs = 520)
             }
-            Mascot(110.dp, Modifier.align(Alignment.BottomStart).offset(26.dp, 10.dp).riseIn(250))
         }
         val big = body(46.sp, FontWeight.Medium).copy(letterSpacing = (-1.6).sp)
         val accent = big.copy(fontFamily = Fonts.serif, fontStyle = FontStyle.Italic, fontWeight = FontWeight.Normal, fontSize = 52.sp)
@@ -118,7 +124,7 @@ fun WelcomeScreen(app: AppState) {
         )
         Spacer()
         ErrorNote(error, Modifier.padding(horizontal = 26.dp, vertical = 8.dp))
-        PillButton("Let's fetch", loading = busy, modifier = Modifier.padding(horizontal = 20.dp).riseIn(1000, distance = 40.dp), onClick = {
+        PillButton("Get started", loading = busy, modifier = Modifier.padding(horizontal = 20.dp).riseIn(1000, distance = 40.dp), onClick = {
             busy = true; error = null
             scope.launch {
                 runCatching { app.ensureSignedIn() }
@@ -127,6 +133,7 @@ fun WelcomeScreen(app: AppState) {
                 busy = false
             }
         })
+    }
     }
 }
 
@@ -516,18 +523,15 @@ fun ReadyScreen(app: AppState) {
     var name by remember { mutableStateOf(if (app.dogName == "Scout") "" else app.dogName) }
     var typing by remember { mutableStateOf(false) }
     var typed by remember { mutableStateOf(false) }
-    var leaving by remember { mutableStateOf(false) }
-    val reduce = LocalReduceMotion.current
     LaunchedEffect(name) { if (typed) { typing = true; delay(700); typing = false } }
     val tilt by animateFloatAsState(if (typing) 12f else 0f, uiSpring(stiffness = 300f), label = "tilt")
     Column(Modifier.fillMaxSize().dotted().padding(top = 52.dp, bottom = 34.dp)) {
         StepHeader(5, onBack = { app.back() })
         Column(Modifier.weight(1f).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text("Meet your fetcher.", style = hand(36.sp))
-            BoxWithConstraints(Modifier.fillMaxWidth().height(190.dp), contentAlignment = Alignment.Center) {
-                val runOff = rememberProgress(leaving, 450, easing = androidx.compose.animation.core.FastOutLinearInEasing)
-                if (leaving) RunningDog(150.dp, Modifier.graphicsLayer { translationX = runOff.value * (maxWidth / 2 + 150.dp).toPx() }, ground = false)
-                else Dog(150.dp, DogMood.Wag, Modifier.popIn(150).graphicsLayer { rotationZ = -3f }, headTilt = tilt)
+            Box(Modifier.fillMaxWidth().height(190.dp), contentAlignment = Alignment.Center) {
+                // On "Start fetching" this big Scout shrinks into the small one peeking over the viewfinder.
+                Dog(150.dp, DogMood.Wag, Modifier.sharedShape(SCOUT_KEY).popIn(150).graphicsLayer { rotationZ = -3f }, headTilt = tilt)
             }
             Text("What should I call them?", style = body(14.sp, FontWeight.SemiBold, Ink.Muted))
             Box(Modifier.fillMaxWidth().height(60.dp).clip(RoundedCornerShape(999.dp)).background(Ink.Pill).padding(horizontal = 22.dp), contentAlignment = Alignment.CenterStart) {
@@ -546,10 +550,9 @@ fun ReadyScreen(app: AppState) {
             }
         }
         // From Account (already onboarded) this is a rename.
-        PillButton(if (app.onboarded) "Save" else "Start fetching", enabled = !leaving, modifier = Modifier.padding(horizontal = 20.dp), onClick = {
+        PillButton(if (app.onboarded) "Save" else "Start fetching", modifier = Modifier.padding(horizontal = 20.dp), onClick = {
             app.saveDogName(name)
-            if (app.onboarded) app.back()
-            else scope.launch { leaving = true; delay(if (reduce) 0 else 460); app.finishOnboarding() }
+            if (app.onboarded) app.back() else app.finishOnboarding()
         })
     }
 }

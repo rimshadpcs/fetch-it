@@ -105,6 +105,25 @@ fun rememberHaptics(): Haptics {
 val LocalSharedScope = compositionLocalOf<SharedTransitionScope?> { null }
 val LocalScreenScope = compositionLocalOf<AnimatedVisibilityScope?> { null }
 
+/**
+ * Same element across screens even when it's drawn differently on each (big Scout → the small Scout peeking over the
+ * viewfinder): the bounds morph and the two drawings cross-fade. No-op with reduce motion.
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+fun Modifier.sharedShape(key: Any): Modifier {
+    val shared = LocalSharedScope.current ?: return this
+    val screen = LocalScreenScope.current ?: return this
+    if (LocalReduceMotion.current) return this
+    return with(shared) {
+        this@sharedShape.sharedBounds(
+            rememberSharedContentState(key), screen,
+            boundsTransform = { _, _ -> tween(450, easing = FastOutSlowInEasing) },
+            resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(),
+        )
+    }
+}
+
 /** Marks this as the same element as every other `sharedPhoto(key)` on the next / previous screen. */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable

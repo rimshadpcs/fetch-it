@@ -574,3 +574,10 @@ inactive. No Material icons. Adding one: copy its `<path d>` values from `npm pa
       activity logged. Deployed Nov 5 (purchaseOffer, approvePurchase, checkWatches, checkWatchesNow,
       sweepStuckPurchases, runMaintenance). The new Rules chips and approval switch need the new app build; not yet
       seen on a device.
+- [~] Design pass (Nov 7), committed per group, not yet seen on a device:
+      1. Scout presence: `ScoutFace` (head only; pupils shift via `DogPose.look`, random glances, blinks every 2.4–4.6 s;
+         `lookAt` overrides) and `ScoutPeek` (top part rising over an edge). Welcome: big face peeking from the bottom,
+         looks up at "Get started" after 2.6 s. Every onboarding step: a small peek under the progress bar. Ready →
+         Fetch: big Scout shrinks into the peek over the viewfinder (`Modifier.sharedShape(SCOUT_KEY)`, shared bounds
+         with scale-to-bounds; the screens cross-fade 450 ms). Results: a peek over the Buy bar whose eyes follow the
+         last tap (pointer events watched at `PointerEventPass.Initial`, never consumed).

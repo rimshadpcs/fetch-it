@@ -1,5 +1,9 @@
 package com.rimapps.fetchit.ui.motion
 
+import androidx.compose.animation.core.VectorConverter
+import androidx.compose.ui.draw.clipToBounds
+import kotlinx.coroutines.delay
+import kotlin.random.Random
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -80,6 +84,8 @@ internal data class DogPose(
     val run: Pair<Float, Float>? = null,
     /** Sleeping: 0…1 through the Zzz cycle, null = none. */
     val zzz: Float? = null,
+    /** Where the eyes look: -1…1 on each axis (pupils shift ~2 units). */
+    val look: Offset = Offset.Zero,
 )
 
 /** Pose for [mood] at [t] ms (t = 0 is the still pose used with reduce motion). [shake] is HeadShake's 0→1 progress. */
@@ -159,32 +165,92 @@ internal fun DrawScope.drawDog(p: DogPose) {
                 drawPath(collar, Ink.Accent, style = Stroke(3f, cap = StrokeCap.Round))
                 drawCircle(Ink.Accent, 3.5f, Offset(51f, 72f))
                 translate(11f + p.headDx, 2f + p.headDy) {
-                    rotate(p.headTilt, pivot = Offset(40f, 56f)) {
-                        drawPath(head, Color.White)
-                        drawPath(head, ink, style = line)
-                        rotate(p.earL, pivot = Offset(22f, 24f)) { drawPath(earL, ink) }
-                        rotate(p.earR, pivot = Offset(58f, 24f)) { drawPath(earR, ink) }
-                        drawOval(ink, Offset(49f - 7f, 34f - 6f), Size(14f, 12f))
-                        if (p.eyesClosed) {
-                            drawPath(closedEyeL, ink, style = Stroke(2.2f, cap = StrokeCap.Round))
-                            drawPath(closedEyeR, Color.White, style = Stroke(1.8f, cap = StrokeCap.Round))
-                        } else {
-                            drawCircle(Color.White, 1.4f, Offset(50f, 34f))
-                            drawCircle(ink, 3f, Offset(32f, 35f))
-                        }
-                        scale(p.nose, pivot = Offset(40f, 45f)) { drawOval(ink, Offset(40f - 4f, 45f - 3f), Size(8f, 6f)) }
-                        if (p.bone) {
-                            drawPath(mouth, ink, style = Stroke(2.2f, cap = StrokeCap.Round))
-                            drawPath(bone, Color.White)
-                            drawPath(bone, ink, style = Stroke(2f, cap = StrokeCap.Round, join = StrokeJoin.Round))
-                        } else {
-                            drawPath(if (p.tongueOut) tongueOut else tongue, Ink.Accent)
-                            drawPath(mouth, ink, style = Stroke(2.2f, cap = StrokeCap.Round))
-                        }
-                    }
+                    rotate(p.headTilt, pivot = Offset(40f, 56f)) { drawHead(p, line) }
                 }
             }
         }
+    }
+}
+
+/** Head, ears and face in head coordinates (x 3…77, y 15…63): shared by the whole dog and the peeking face. */
+private fun DrawScope.drawHead(p: DogPose, line: Stroke) {
+    val ink = Ink.Ink
+    drawPath(head, Color.White)
+    drawPath(head, ink, style = line)
+    rotate(p.earL, pivot = Offset(22f, 24f)) { drawPath(earL, ink) }
+    rotate(p.earR, pivot = Offset(58f, 24f)) { drawPath(earR, ink) }
+    drawOval(ink, Offset(49f - 7f, 34f - 6f), Size(14f, 12f))
+    if (p.eyesClosed) {
+        drawPath(closedEyeL, ink, style = Stroke(2.2f, cap = StrokeCap.Round))
+        drawPath(closedEyeR, Color.White, style = Stroke(1.8f, cap = StrokeCap.Round))
+    } else {
+        val dx = 2.2f * p.look.x
+        val dy = 2f * p.look.y
+        drawCircle(Color.White, 1.5f, Offset(50f + dx, 34f + dy))
+        drawCircle(ink, 3f, Offset(32f + dx, 35f + dy))
+    }
+    scale(p.nose, pivot = Offset(40f, 45f)) { drawOval(ink, Offset(40f - 4f, 45f - 3f), Size(8f, 6f)) }
+    if (p.bone) {
+        drawPath(mouth, ink, style = Stroke(2.2f, cap = StrokeCap.Round))
+        drawPath(bone, Color.White)
+        drawPath(bone, ink, style = Stroke(2f, cap = StrokeCap.Round, join = StrokeJoin.Round))
+    } else {
+        drawPath(if (p.tongueOut) tongueOut else tongue, Ink.Accent)
+        drawPath(mouth, ink, style = Stroke(2.2f, cap = StrokeCap.Round))
+    }
+}
+
+// ---- Scout's face on its own: peeking over edges, watching ----
+
+/**
+ * Scout's face (ears, eyes, nose; no body), [width] wide. The eyes glance around and blink while [lookAt] is null;
+ * given a target (-1…1 on each axis, e.g. Offset(0f, -1f) = up) they look there. With reduce motion the eyes
+ * just look at the target (or ahead) and don't blink.
+ */
+@Composable
+fun ScoutFace(width: Dp, modifier: Modifier = Modifier, lookAt: Offset? = null, glance: Boolean = true) {
+    val reduce = LocalReduceMotion.current
+    val look = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
+    var blink by remember { mutableStateOf(false) }
+    LaunchedEffect(lookAt, glance, reduce) {
+        val target = lookAt
+        when {
+            target != null -> if (reduce) look.snapTo(target) else look.animateTo(target, tween(140))
+            !glance || reduce -> look.snapTo(Offset.Zero)
+            else -> while (true) {
+                look.animateTo(Offset(Random.nextFloat() * 2f - 1f, Random.nextFloat() * 1.4f - 0.7f), tween(120))
+                delay(700L + Random.nextLong(900))
+            }
+        }
+    }
+    LaunchedEffect(reduce) {
+        if (reduce) return@LaunchedEffect
+        while (true) { delay(2400L + Random.nextLong(2200)); blink = true; delay(130); blink = false }
+    }
+    Canvas(modifier.size(width, width * (52f / 78f))) {
+        // Face box: x 1…79, y 13…65 in head coordinates.
+        scale(this.size.width / 78f, this.size.height / 52f, pivot = Offset.Zero) {
+            translate(-1f, -13f) { drawHead(DogPose(look = look.value, eyesClosed = blink), Stroke(2.6f, cap = StrokeCap.Round, join = StrokeJoin.Round)) }
+        }
+    }
+}
+
+/**
+ * Scout's face rising over an edge: only the top [showing] of it is visible, as if he's behind the thing
+ * below him. It rises into place over 350 ms after [delayMs] (a fade with reduce motion).
+ */
+@Composable
+fun ScoutPeek(width: Dp, modifier: Modifier = Modifier, showing: Float = 0.62f, lookAt: Offset? = null, glance: Boolean = true, delayMs: Int = 0) {
+    val reduce = LocalReduceMotion.current
+    val rise = rememberProgress(Unit, if (reduce) 200 else 350, delayMs, fadeOnly = true)
+    val faceHeight = width * (52f / 78f)
+    Box(modifier.size(width, faceHeight * showing).clipToBounds()) {
+        ScoutFace(
+            width, Modifier.graphicsLayer {
+                if (reduce) alpha = rise.value else translationY = (1f - rise.value) * faceHeight.toPx() * showing
+            },
+            lookAt = lookAt, glance = glance,
+        )
     }
 }
 
