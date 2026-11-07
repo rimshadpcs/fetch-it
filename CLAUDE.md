@@ -694,7 +694,9 @@ reduce motion.
       between the check and the fetch. Tests: `npm test` (+3, 51 total), `test/linkphoto.mjs` (emulators: the user's pin →
       99 KB JPEG in 4.5 s, wayfair.com → its preview image, Instagram hint, 169.254.169.254 / localhost refused).
       Deployed Nov 8 (linkPhoto, watchOffer, checkWatches, checkWatchesNow); not seen on a device.
-- [~] Webhooks, Agent Toolkit, Goes well with, Gift mode (Nov 8). Not deployed; not seen on a device.
+- [~] Webhooks, Agent Toolkit, Goes well with, Gift mode (Nov 8). Deployed Nov 8 (all functions + the orders.paypalCaptureId
+      index); webhook registered in the sandbox app: id 6KK242923K750983P → `PAYPAL_WEBHOOK_ID` in .env.fetchit-437a0 (a
+      defineString with an empty default still blocks a non-interactive deploy: register first). Not seen on a device.
       - **paypalWebhook** (`src/webhooks/`): `events.ts` parses PAYMENT.CAPTURE.COMPLETED/DENIED/REFUNDED/REVERSED,
         CUSTOMER.DISPUTE.CREATED/UPDATED/RESOLVED, VAULT.PAYMENT-TOKEN.DELETED (refund → capture via its `up` link; dispute →
         `disputed_transactions[].seller_transaction_id`). Orders found by `paypalCaptureId` (collection-group field override in
