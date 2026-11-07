@@ -238,6 +238,9 @@ Oreo Doodle Icons, free set (MIT, Nicole Tang; THIRD_PARTY_NOTICES.md). SVG path
 → stroke-only `ImageVector` on the 48 grid, round caps/joins, static (no draw-on, no wiggle). `DoodleIcon(icon, cd,
 size, color, strokeWidth)`: ~4 grid units at 24 dp (set default 3.4), 4.6 when active; #111111 active / #6E6E6B
 inactive. No Material icons. Adding one: copy its `<path d>` values from `npm pack @oreo-design/doodle-icons`.
+One exception, asked for Nov 7: the Fetch button's camera is animated (`BoilingCamera` in icons/BoilingDoodle.kt): its
+strokes draw on with the set's animated-SVG timings, then it "boils" forever (points displaced by smooth noise whose
+seed steps 6 times per 0.86 s, ±2 grid units, like the SVG's feTurbulence/feDisplacementMap). Static under reduce motion.
 
 ### Components (`shared/.../ui/components/`)
 - `Modifier.pressScale(source, Press.PILL 0.96 | GRAY 0.95 | ROUND 0.90, tilt)`: 80 ms sink, spring back with

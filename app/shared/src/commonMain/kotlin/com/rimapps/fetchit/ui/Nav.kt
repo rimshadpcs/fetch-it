@@ -1,5 +1,6 @@
 package com.rimapps.fetchit.ui
 
+import com.rimapps.fetchit.ui.icons.BoilingCamera
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
@@ -159,6 +160,6 @@ private fun FetchButton(modifier: Modifier, onClick: () -> Unit) {
             .semantics { contentDescription = "Fetch"; role = Role.Button },
         contentAlignment = Alignment.Center,
     ) {
-        DoodleIcon(Doodle.Camera, null, size = 34.dp, color = Ink.White, strokeWidth = 4.2f)
+        BoilingCamera(34.dp, Ink.White) // the one animated icon: draws on, then boils
     }
 }
