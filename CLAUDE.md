@@ -657,7 +657,8 @@ reduce motion.
       the right (red heart → Saved for later, filled once anything's saved; price tags → Price watches), each with a small
       count badge (watches: green when a watched price is below its start price, red when no drop yet); today's date under it ("7th" serif + "November"); then a pill row: "$X left this month"
       as the black pill (→ Rules) and the gray snaps pill, both 44 dp. Builds; not seen on a device.
-      Nov 7 follow-up: `Doodle.PriceTag` (not in the set: two stacked tags + "$", built on the set's tag.svg, after the
-      user's reference) replaces the bell for watches (header, watch pill, You row). Red/green dot on the watch pill and
-      on each live watch in Price watches (`Watch.dropped` = lastPrice < startPrice). Saved for later: the buy panel has
+      Nov 7 follow-up: `Doodle.PriceTag` (the user's own price-tags icon, `drawable/price_tag.png` 192 px, tinted; DoodleIcon
+      draws it as an image, the only non-vector one) replaces the bell for watches (header, watch pill, You row). Red/green dot on the watch pill and
+      on each live watch in Price watches (`Watch.dropped` = lastPrice < startPrice). Fixed: Price watches showed nothing
+      because `lastCheckedAt` was typed String but Firestore timestamps decode to epoch millis (now Long; shared test). Saved for later: the buy panel has
       the watch pill too (same `WatchSheet`, the saved item's live offer + picked size).

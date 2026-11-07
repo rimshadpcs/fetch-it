@@ -2,6 +2,7 @@ package com.rimapps.fetchit
 
 import com.rimapps.fetchit.data.ActivityEntry
 import com.rimapps.fetchit.data.Firebase
+import com.rimapps.fetchit.data.Watch
 import com.rimapps.fetchit.data.json
 import com.rimapps.fetchit.ui.money
 import com.rimapps.fetchit.ui.weekday
@@ -11,6 +12,31 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class SharedCommonTest {
+    @Test
+    fun decodesAWatchDocument() {
+        // Shape written by watchOffer: integer target, timestamps, a colour map, nulls.
+        val doc = json.parseToJsonElement(
+            """
+            {"name": "projects/p/databases/(default)/documents/users/u/watches/w1",
+             "fields": {
+               "status": {"stringValue": "watching"}, "productId": {"stringValue": "LtIyk1j"},
+               "merchant": {"stringValue": "wayfair.com"}, "title": {"stringValue": "Lamp"},
+               "color": {"mapValue": {"fields": {"option": {"stringValue": "Color"}, "label": {"stringValue": "Amber"}}}},
+               "imageUrl": {"nullValue": null}, "targetPrice": {"integerValue": "30"}, "currency": {"stringValue": "USD"},
+               "size": {"nullValue": null}, "placeId": {"stringValue": "home"}, "startPrice": {"doubleValue": 42.99},
+               "lastPrice": {"doubleValue": 39.5}, "lastCheckedAt": {"timestampValue": "2026-11-07T18:30:00Z"},
+               "channel3Tracking": {"stringValue": "active"}, "purchaseId": {"nullValue": null},
+               "createdAt": {"timestampValue": "2026-11-07T18:30:00Z"}, "updatedAt": {"timestampValue": "2026-11-07T18:30:00Z"}
+             }}
+            """,
+        ).jsonObject
+        val w = json.decodeFromJsonElement<Watch>(Firebase.decodeDocument(doc))
+        assertEquals("w1", w.id)
+        assertEquals(30.0, w.targetPrice)
+        assertEquals(true, w.watching)
+        assertEquals(true, w.dropped)
+    }
+
     @Test
     fun decodesFirestoreRestDocuments() {
         val doc = json.parseToJsonElement(

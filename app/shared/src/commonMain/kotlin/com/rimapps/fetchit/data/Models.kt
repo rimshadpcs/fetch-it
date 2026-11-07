@@ -187,7 +187,8 @@ data class Watch(
     val placeId: String? = null,
     val startPrice: Double? = null,
     val lastPrice: Double? = null,
-    val lastCheckedAt: String? = null,
+    /** Epoch millis (Firestore timestamps decode to numbers). */
+    val lastCheckedAt: Long? = null,
     val purchaseId: String? = null,
     val purchaseStatus: String? = null,
 ) {

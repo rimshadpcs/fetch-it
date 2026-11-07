@@ -157,9 +157,10 @@ private const val DONE_PAUSE = 350L
 /** You → Price watches: each watch with its target, the last price seen, and Stop. Finished ones below. */
 @Composable
 fun WatchesScreen(app: AppState) {
-    LaunchedEffect(Unit) { runCatching { app.watches = app.api.watches() } }
     val scope = rememberCoroutineScope()
     var error by remember { mutableStateOf<String?>(null) }
+    // A failed read shows up here instead of looking like an empty list.
+    LaunchedEffect(Unit) { runCatching { app.watches = app.api.watches() }.onFailure { error = it.friendly() } }
     Box(Modifier.fillMaxSize().dotted()) {
         Column(Modifier.fillMaxSize().padding(top = 56.dp, bottom = 34.dp)) {
             Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
