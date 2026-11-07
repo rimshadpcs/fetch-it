@@ -682,7 +682,7 @@ reduce motion.
       bought. `dropToNotify` (lib/pricehistory.ts, unit test, 48 total): only a price under `notifiedPrice ?? startPrice`, so a
       bounce back to an old low doesn't re-push; `notifiedPrice` survives re-targeting. Push data `{open: "watch", watchId}`,
       Android tag `watch-<id>` (a newer drop replaces the older one), tap → Price watches. `npm run test:watch` (6 tests).
-      Not deployed; not seen on a device.
+      Deployed Nov 8 (linkPhoto, watchOffer, checkWatches, checkWatchesNow); not seen on a device.
 - [~] Share links (Nov 8): Pinterest / Instagram / browsers share a link (text/plain), not the photo. Manifest takes text/plain;
       MainActivity → `SharedPhotos.pendingLink` → `linkPhoto` → normal fetch, with "Getting the photo from Pinterest…" (paw loader)
       on Fetch, or the reason it failed. Pinterest: `GET pinterest.com/oembed.json?url=…/pin/<id>/` → `thumbnail_url` (236x;
@@ -692,4 +692,4 @@ reduce motion.
       only, manual redirects (≤ 5, each re-checked), 3 MB page / 10 MB image caps, 8 s timeouts. Known gap: DNS rebinding
       between the check and the fetch. Tests: `npm test` (+3, 51 total), `test/linkphoto.mjs` (emulators: the user's pin →
       99 KB JPEG in 4.5 s, wayfair.com → its preview image, Instagram hint, 169.254.169.254 / localhost refused).
-      Not deployed; not seen on a device.
+      Deployed Nov 8 (linkPhoto, watchOffer, checkWatches, checkWatchesNow); not seen on a device.
