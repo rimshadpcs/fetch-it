@@ -116,7 +116,7 @@ fun PostageStamp(id: String, modifier: Modifier = Modifier, tilt: Float = 0f, pa
 fun SnapsChip(app: AppState, modifier: Modifier = Modifier) {
     val newest = app.snaps.firstOrNull() ?: return
     Row(
-        modifier.height(40.dp).grayPress({ app.go(Screen.Snaps()) }).background(Ink.Pill).padding(start = 8.dp, end = 14.dp)
+        modifier.height(44.dp).grayPress({ app.go(Screen.Snaps()) }).background(Ink.Pill).padding(start = 8.dp, end = 14.dp)
             .semantics(mergeDescendants = true) { contentDescription = "Your snaps, ${app.snaps.size}" },
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {

@@ -74,6 +74,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
@@ -140,17 +141,23 @@ fun FetchScreen(app: AppState) {
     val session = app.session
     MainScaffold {
         Column(Modifier.fillMaxSize()) {
-            Text("What should I fetch?", style = hand(32.sp), modifier = Modifier.padding(start = 24.dp, end = 22.dp, top = 58.dp))
-            // Budget chip (→ house rules) and, beside it, the snaps chip (→ the album).
-            Row(Modifier.horizontalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            // Header: title with the Saved (heart) and Price watches (bell) shortcuts on the right, today's date under it,
+            // then a row of pills: what's left this month (black, → house rules) and the snaps album.
+            Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 14.dp, top = 52.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("What should I fetch?", style = hand(30.sp), modifier = Modifier.weight(1f))
+                HeaderIcon(Doodle.Heart, "Saved for later", app.saved.size, Ink.Accent, filled = app.saved.isNotEmpty()) { app.go(Screen.Saved) }
+                HeaderIcon(Doodle.Bell, "Price watches", app.watches.count { it.watching }, Ink.Ink) { app.go(Screen.Watches) }
+            }
+            TodayLine(Modifier.padding(start = 24.dp, top = 2.dp))
+            Row(Modifier.horizontalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 app.budgetLeft()?.let { left ->
                     Row(
-                        Modifier.height(40.dp).grayPress({ app.go(Screen.Rules(RuleFocus.Budget)) }).background(Ink.Pill).padding(horizontal = 14.dp)
+                        Modifier.height(44.dp).grayPress({ app.go(Screen.Rules(RuleFocus.Budget)) }).background(Ink.Ink).padding(horizontal = 16.dp)
                             .semantics(mergeDescendants = true) {},
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        CountUpMoney(left, serif(19.sp, Ink.Ink), from = null)
-                        Text(" left this month", style = body(15.sp, FontWeight.SemiBold, Ink.Muted), maxLines = 1)
+                        CountUpMoney(left, serif(19.sp, Ink.White), from = null)
+                        Text(" left this month", style = body(15.sp, FontWeight.SemiBold, Ink.White.copy(alpha = 0.75f)), maxLines = 1)
                     }
                 }
                 SnapsChip(app)
@@ -208,6 +215,33 @@ fun FetchScreen(app: AppState) {
                 }
             }
         }
+    }
+}
+
+/** A bare doodle icon button (like the reference's header icons) with a small black count badge. */
+@Composable
+private fun HeaderIcon(icon: Doodle, label: String, count: Int, color: Color, filled: Boolean = false, onClick: () -> Unit) {
+    Box(
+        Modifier.size(46.dp).roundButton(onClick).semantics(mergeDescendants = true) { contentDescription = if (count > 0) "$label, $count" else label },
+        contentAlignment = Alignment.Center,
+    ) {
+        DoodleIcon(icon, null, size = 27.dp, color = color, strokeWidth = 4.2f, filled = filled)
+        if (count > 0) Box(
+            Modifier.align(Alignment.TopEnd).padding(top = 5.dp, end = 3.dp).size(18.dp).clip(CircleShape).background(Ink.Ink),
+            contentAlignment = Alignment.Center,
+        ) { Text(if (count > 9) "9+" else "$count", style = body(10.sp, FontWeight.Bold, Ink.White)) }
+    }
+}
+
+/** "7th November": the day in serif italic, the month in the body font (as in the scrapbook reference). */
+@Composable
+private fun TodayLine(modifier: Modifier = Modifier) {
+    val d = kotlin.time.Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date
+    val n = d.day
+    val suffix = if (n % 100 in 11..13) "th" else when (n % 10) { 1 -> "st"; 2 -> "nd"; 3 -> "rd"; else -> "th" }
+    Row(modifier, verticalAlignment = Alignment.Bottom) {
+        Text("$n$suffix", style = serif(19.sp, Ink.Muted))
+        Text(" " + d.month.name.lowercase().replaceFirstChar { it.uppercase() }, style = body(17.sp, FontWeight.Medium, Ink.Muted))
     }
 }
 
