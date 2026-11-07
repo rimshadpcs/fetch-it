@@ -588,3 +588,6 @@ inactive. No Material icons. Adding one: copy its `<path d>` values from `npm pa
          the drum) with a mood caption ("$200 a month · Sensible shopper"); categories as full-width rows that fill black
          from the left with a drawn ✓, a live counter ("3 categories" / "none selected"); disabled dark pills are dim
          gray and light up to black when the choice becomes valid.
+      4. Loading: `Modifier.blurIn(index)` (blur 14→0 dp, fade up, slight rise, 60 ms stagger; fade under reduce motion;
+         below Android 12 blur isn't drawn) on Results cards and Activity cards; Activity shows blurred placeholder notes
+         until its first load (`AppState.activityLoaded`).

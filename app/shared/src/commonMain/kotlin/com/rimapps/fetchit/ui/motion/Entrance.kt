@@ -1,5 +1,7 @@
 package com.rimapps.fetchit.ui.motion
 
+import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.blur
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.keyframes
@@ -100,4 +102,22 @@ fun Modifier.pageTurn(visible: Float): Modifier = graphicsLayer {
         visible < 1f -> (1f - visible) * 3f
         else -> (visible - 1f) * -3f
     }
+}
+
+/**
+ * Builds in from blurry to sharp (blur 14 → 0 dp, fading up, a slight rise), staggered by [index] (60 ms, capped):
+ * Results and Activity cards arriving instead of a spinner. Plain fade with reduce motion (and below Android 12,
+ * where blur isn't drawn, it's a fade-and-rise).
+ */
+@Composable
+fun Modifier.blurIn(index: Int = 0, durationMs: Int = 360): Modifier {
+    val reduce = LocalReduceMotion.current
+    val p = rememberProgress(Unit, if (reduce) 200 else durationMs, 60 * index.coerceAtMost(8), FastOutSlowInEasing, fadeOnly = true)
+    val v = p.value
+    return this
+        .then(if (!reduce && v < 1f) Modifier.blur(((1f - v) * 14f).dp, BlurredEdgeTreatment.Unbounded) else Modifier)
+        .graphicsLayer {
+            alpha = 0.15f + 0.85f * v
+            if (!reduce) translationY = (1f - v) * 10.dp.toPx()
+        }
 }

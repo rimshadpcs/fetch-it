@@ -1,5 +1,6 @@
 package com.rimapps.fetchit.ui
 
+import com.rimapps.fetchit.ui.motion.blurIn
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -377,7 +378,7 @@ fun ResultsScreen(app: AppState) {
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                             shown.filterIndexed { i, _ -> i % 2 == col }.forEachIndexed { j, o ->
                                 val index = j * 2 + col
-                                RiseIn(index) {
+                                Box(Modifier.blurIn(index)) {
                                     OfferCard(
                                         o, selected = o == offer, height = if ((index % 3) == 0) 196.dp else 160.dp, tilt = if (index % 2 == 0) -1.2f else 1.2f,
                                         caption = when {

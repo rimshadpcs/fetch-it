@@ -1,5 +1,7 @@
 package com.rimapps.fetchit.ui
 
+import com.rimapps.fetchit.ui.motion.blurIn
+import androidx.compose.ui.draw.blur
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -99,13 +101,33 @@ fun ActivityScreen(app: AppState) {
                 listOf("All", "Bought", "Waiting", "Blocked").forEach { f -> Chip(f, filter == f, onClick = { filter = f }) }
             }
             Box(Modifier.fillMaxWidth().height(1.dp).background(Ink.Divider))
-            if (cards.isEmpty()) {
+            if (!app.activityLoaded) {
+                // Still loading: blurred placeholder notes instead of a spinner; the real cards build in sharp.
+                Column(Modifier.padding(20.dp).blur(10.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    repeat(3) { i -> PlaceholderNote(if (i % 2 == 0) -0.8f else 0.8f) }
+                }
+            } else if (cards.isEmpty()) {
                 Column(Modifier.fillMaxSize().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                     Mascot(110.dp)
                     Text(if (app.activity.isEmpty()) "Nothing yet. Snap something!" else "Nothing here.", style = hand(24.sp, Ink.Muted))
                 }
             } else LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                itemsIndexed(cards, key = { _, e -> e.id }) { i, e -> RiseIn(i.coerceAtMost(6)) { ActivityCard(app, e, if (i % 2 == 0) -0.8f else 0.8f) } }
+                itemsIndexed(cards, key = { _, e -> e.id }) { i, e -> Box(Modifier.blurIn(i)) { ActivityCard(app, e, if (i % 2 == 0) -0.8f else 0.8f) } }
+            }
+        }
+    }
+}
+
+/** The shape of an Activity card with gray bars for text: drawn blurred while Activity loads. */
+@Composable
+private fun PlaceholderNote(tilt: Float) {
+    PaperNote(Modifier.fillMaxWidth(), tilt = tilt) {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(Modifier.size(72.dp).background(Ink.TrackOff))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.fillMaxWidth(0.6f).height(12.dp).background(Ink.TrackOff))
+                Box(Modifier.fillMaxWidth(0.9f).height(16.dp).background(Ink.TrackOff))
+                Box(Modifier.fillMaxWidth(0.75f).height(10.dp).background(Ink.TrackOff))
             }
         }
     }

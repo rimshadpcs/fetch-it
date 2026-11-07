@@ -181,6 +181,7 @@ class AppState(val scope: CoroutineScope, val api: FetchApi = FetchApi()) {
             places = api.places()
             monthToDate = api.monthToDate()
             activity = api.activity()
+            activityLoaded = true
         }
     }
 
@@ -202,7 +203,11 @@ class AppState(val scope: CoroutineScope, val api: FetchApi = FetchApi()) {
         get() = store.get("askedPush") == "1"
         set(v) = store.set("askedPush", if (v) "1" else null)
 
-    fun refreshActivity() = scope.launch { runCatching { activity = api.activity(); monthToDate = api.monthToDate() } }
+    /** False until Activity has loaded once (Activity shows blurred placeholder notes until then). */
+    var activityLoaded by mutableStateOf(false)
+        private set
+
+    fun refreshActivity() = scope.launch { runCatching { activity = api.activity(); activityLoaded = true; monthToDate = api.monthToDate() } }
 
     /** A purchase is waiting for the user's OK (its latest Activity entry says so): the red dot on Activity. */
     val needsApproval: Boolean get() = activity.distinctBy { it.purchaseId ?: it.id }.any { it.status == "needs_approval" }
