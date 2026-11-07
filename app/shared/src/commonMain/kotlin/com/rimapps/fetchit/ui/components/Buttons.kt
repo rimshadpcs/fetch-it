@@ -1,5 +1,6 @@
 package com.rimapps.fetchit.ui.components
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
@@ -70,13 +71,14 @@ fun PillButton(
     height: Dp = 58.dp,
     leading: (@Composable () -> Unit)? = null,
 ) {
-    val bg = if (dark) Ink.Ink else Ink.Pill
+    // Disabled dark pills sit dim gray and light up to black once enabled (the choice is valid).
+    val bg by animateColorAsState(if (!dark) Ink.Pill else if (enabled) Ink.Ink else Color(0xFFC9C9C5), tween(300), label = "pillBg")
     val fg = if (dark) Ink.White else Ink.Muted
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
     val haptics = rememberHaptics()
     val reduce = LocalReduceMotion.current
-    val alpha by animateFloatAsState(if (enabled) 1f else 0.4f, tween(250), label = "enabled")
+    val alpha by animateFloatAsState(if (enabled || dark) 1f else 0.4f, tween(250), label = "enabled")
     val shadow by animateDpAsState(if (!dark) 0.dp else if (pressed) 2.dp else 6.dp, tween(80), label = "shadow")
     // Arming bounce when it becomes enabled (not on first show).
     val arm = remember { Animatable(1f) }

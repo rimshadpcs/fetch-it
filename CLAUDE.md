@@ -583,3 +583,8 @@ inactive. No Material icons. Adding one: copy its `<path d>` values from `npm pa
          last tap (pointer events watched at `PointerEventPass.Initial`, never consumed).
       2. Welcome headline on two tilted paper-tape strips ("You spot it." / "We fetch it.") that slap on 300 ms apart
          (`TapeStrip`: 1.3→1 spring, light tap); a pen arrow draws from the lamp polaroid to "spotted at a café".
+      3. Onboarding selections: budget and auto-buy limit on side-by-side 3D drums (`DrumPicker`: snap fling, tick
+         haptic per value, off-centre rows tip/shrink/fade/blur; "type it" swaps in AmountField and the typed value joins
+         the drum) with a mood caption ("$200 a month · Sensible shopper"); categories as full-width rows that fill black
+         from the left with a drawn ✓, a live counter ("3 categories" / "none selected"); disabled dark pills are dim
+         gray and light up to black when the choice becomes valid.

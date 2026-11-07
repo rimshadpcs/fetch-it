@@ -1,5 +1,20 @@
 package com.rimapps.fetchit.ui
 
+import com.rimapps.fetchit.ui.components.grayPress
+import com.rimapps.fetchit.ui.components.WarningNote
+import com.rimapps.fetchit.ui.components.DrumPicker
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.clickable
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.rotate
 import com.rimapps.fetchit.ui.motion.rememberHaptics
@@ -412,32 +427,36 @@ fun RulesEditor(initial: HouseRules, focus: RuleFocus? = null, onChange: (HouseR
     var r by remember(initial) { mutableStateOf(initial) }
     fun update(n: HouseRules) { r = n; onChange(n) }
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
-        Column(Modifier.rulesSection(focus == RuleFocus.Budget), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Monthly budget", style = body(14.sp, FontWeight.SemiBold, Ink.Muted))
-            AmountField(r.monthlyBudget, { update(r.copy(monthlyBudget = it)) }, " a month")
-            Segmented(listOf(100.0, 200.0, 500.0), r.monthlyBudget, { money(it) }, { update(r.copy(monthlyBudget = it)) })
+        // Budget and auto-buy limit on two drums side by side; either can be typed instead.
+        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            MoneyDrum(
+                "Monthly budget", r.monthlyBudget, BUDGET_STEPS, " a month", ::budgetMood,
+                Modifier.weight(1f).rulesSection(focus == RuleFocus.Budget),
+            ) { update(r.copy(monthlyBudget = it)) }
+            MoneyDrum(
+                "Auto-buy up to", r.perItemLimit, PER_ITEM_STEPS, " per item", ::perItemMood,
+                Modifier.weight(1f).rulesSection(focus == RuleFocus.PerItem),
+            ) { update(r.copy(perItemLimit = it)) }
         }
-        Column(Modifier.rulesSection(focus == RuleFocus.PerItem), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Buy without asking, up to", style = body(14.sp, FontWeight.SemiBold, Ink.Muted))
-            AmountField(
-                r.perItemLimit, { update(r.copy(perItemLimit = it)) }, " per item",
-                warning = if (r.perItemLimit > r.monthlyBudget) "That's more than your monthly budget" else null,
-            )
-            Segmented(listOf(25.0, 50.0, 75.0, 100.0), r.perItemLimit, { money(it) }, { update(r.copy(perItemLimit = it)) })
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            AnimatedVisibility(r.perItemLimit > r.monthlyBudget, enter = slideInVertically(tween(250)) { -it } + fadeIn(tween(250)), exit = fadeOut(tween(150))) {
+                WarningNote("That's more than your monthly budget")
+            }
             // How much of the month one auto-buy can take.
             BudgetBar((r.perItemLimit / r.monthlyBudget).toFloat(), color = if (r.perItemLimit > r.monthlyBudget) Ink.Accent else Ink.Ink)
-            Text("Anything over this asks for your fingerprint.", style = hand(18.sp, Ink.Muted))
+            Text("Anything over the limit asks for your fingerprint.", style = hand(18.sp, Ink.Muted))
         }
-        Column(Modifier.rulesSection(focus == RuleFocus.Categories), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("I can shop for…", style = hand(24.sp))
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                // Every Channel3 root, plus any older sub-category slug still in the rules (so it can be turned off).
-                val slugs = ShopCategory.entries.map { it.slug } + r.allowedCategories.filter { s -> ShopCategory.entries.none { it.slug == s } }
-                slugs.forEachIndexed { i, slug ->
-                    val on = slug in r.allowedCategories
-                    Chip(ShopCategory.labelFor(slug), on, check = true, modifier = Modifier.popIn(200 + 30 * i.coerceAtMost(12)), onClick = {
-                        update(r.copy(allowedCategories = if (on) r.allowedCategories - slug else r.allowedCategories + slug))
-                    })
+        Column(Modifier.rulesSection(focus == RuleFocus.Categories), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("I can shop for…", style = hand(24.sp), modifier = Modifier.weight(1f))
+                LiveCount(r.allowedCategories.size)
+            }
+            // Every Channel3 root, plus any older sub-category slug still in the rules (so it can be turned off).
+            val slugs = ShopCategory.entries.map { it.slug } + r.allowedCategories.filter { s -> ShopCategory.entries.none { it.slug == s } }
+            slugs.forEachIndexed { i, slug ->
+                val on = slug in r.allowedCategories
+                CategoryRow(ShopCategory.labelFor(slug), on, Modifier.riseIn(150 + 35 * i.coerceAtMost(10), distance = 10.dp)) {
+                    update(r.copy(allowedCategories = if (on) r.allowedCategories - slug else r.allowedCategories + slug))
                 }
             }
         }
@@ -466,6 +485,81 @@ private fun Modifier.rulesSection(highlight: Boolean): Modifier {
             Ink.Ink.copy(alpha = glow.value), topLeft = Offset(-pad, -pad), size = Size(size.width + 2 * pad, size.height + 2 * pad),
             cornerRadius = CornerRadius(14.dp.toPx()), style = inkStroke(1.6.dp.toPx(), dashed = true, dash = 6.dp.toPx()),
         )
+    }
+}
+
+private val BUDGET_STEPS = listOf(25.0, 50.0, 75.0, 100.0, 150.0, 200.0, 250.0, 300.0, 400.0, 500.0, 750.0, 1000.0, 1500.0, 2000.0)
+private val PER_ITEM_STEPS = listOf(10.0, 15.0, 20.0, 25.0, 30.0, 40.0, 50.0, 60.0, 75.0, 100.0, 125.0, 150.0, 200.0, 250.0, 300.0, 400.0, 500.0)
+
+private fun budgetMood(v: Double) = when {
+    v <= 75 -> "Careful nibbler"
+    v <= 150 -> "Thrifty pup"
+    v <= 300 -> "Sensible shopper"
+    v <= 750 -> "Treat yourself"
+    else -> "Big spender"
+}
+
+private fun perItemMood(v: Double) = when {
+    v <= 25 -> "Little things"
+    v <= 75 -> "Everyday buys"
+    v <= 150 -> "Nice things"
+    v <= 300 -> "Splurges"
+    else -> "Go big"
+}
+
+/**
+ * A money drum with its caption ("$200 a month · Sensible shopper", cross-fading as it changes). "type it" swaps
+ * the drum for a typed amount (AmountField); the typed value then joins the drum.
+ */
+@Composable
+private fun MoneyDrum(title: String, value: Double, steps: List<Double>, suffix: String, mood: (Double) -> String, modifier: Modifier, onChange: (Double) -> Unit) {
+    var typing by remember { mutableStateOf(false) }
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(title, style = body(14.sp, FontWeight.SemiBold, Ink.Muted))
+        if (typing) AmountField(value, { onChange(it); typing = false }, suffix, style = body(30.sp, FontWeight.Medium))
+        else DrumPicker(steps, value, onChange, { money(it) }, contentDescription = title)
+        AnimatedContent(value, transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(150)) }, label = "mood") { v ->
+            Column {
+                Text("${money(v)}$suffix", style = serif(16.sp, Ink.Ink))
+                Text(mood(v), style = hand(19.sp, Ink.Muted))
+            }
+        }
+        Text(
+            if (typing) "use the wheel" else "type it", style = body(13.sp, FontWeight.SemiBold, Ink.Muted),
+            modifier = Modifier.clip(RoundedCornerShape(999.dp)).clickable { typing = !typing }.padding(vertical = 6.dp, horizontal = 2.dp),
+        )
+    }
+}
+
+/** "3 categories" / "1 category" / "none selected", popping when it changes. */
+@Composable
+private fun LiveCount(n: Int) {
+    val reduce = LocalReduceMotion.current
+    val pop = remember { androidx.compose.animation.core.Animatable(1f) }
+    var last by remember { mutableStateOf(n) }
+    LaunchedEffect(n) { if (n != last && !reduce) { pop.snapTo(1.15f); pop.animateTo(1f, uiSpring(stiffness = 600f)) }; last = n }
+    Text(
+        when (n) { 0 -> "none selected"; 1 -> "1 category"; else -> "$n categories" },
+        style = serif(17.sp, if (n == 0) Ink.Warning else Ink.Muted),
+        modifier = Modifier.graphicsLayer { scaleX = pop.value; scaleY = pop.value },
+    )
+}
+
+/** A full-width category row: picking it fills it black from the left and draws a ✓. */
+@Composable
+private fun CategoryRow(label: String, on: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val reduce = LocalReduceMotion.current
+    val fill by animateFloatAsState(if (on) 1f else 0f, tween(if (reduce) 120 else 260), label = "fill")
+    val fg by animateColorAsState(if (on) Ink.White else Ink.Ink, tween(200), label = "fg")
+    Box(
+        modifier.fillMaxWidth().height(50.dp).grayPress(onClick, Role.Checkbox, RoundedCornerShape(16.dp)).background(Ink.Pill)
+            .semantics { stateDescription = if (on) "allowed" else "not allowed" },
+    ) {
+        Box(Modifier.fillMaxHeight().fillMaxWidth(fill).background(Ink.Ink))
+        Row(Modifier.fillMaxSize().padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(label, style = body(16.sp, FontWeight.SemiBold, fg), modifier = Modifier.weight(1f))
+            if (on) CheckMark(Ink.White, Modifier.size(20.dp), durationMs = 260, delayMs = 120, strokeWidth = 2.6.dp)
+        }
     }
 }
 
