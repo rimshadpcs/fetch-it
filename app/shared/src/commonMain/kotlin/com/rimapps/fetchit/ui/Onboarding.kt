@@ -661,7 +661,7 @@ fun ReadyScreen(app: AppState) {
             Text("What should I call them?", style = body(14.sp, FontWeight.SemiBold, Ink.Muted))
             Box(Modifier.fillMaxWidth().height(60.dp).clip(RoundedCornerShape(999.dp)).background(Ink.Pill).padding(horizontal = 22.dp), contentAlignment = Alignment.CenterStart) {
                 if (name.isEmpty()) Text("Scout", style = hand(26.sp, Ink.LightGrey))
-                BasicTextField(name, { name = it.take(20); typed = true }, singleLine = true, textStyle = hand(26.sp), modifier = Modifier.fillMaxWidth())
+                BasicTextField(name, { name = it.filter { c -> c.isLetterOrDigit() || c in " '.-" }.take(20); typed = true }, singleLine = true, textStyle = hand(26.sp), modifier = Modifier.fillMaxWidth())
             }
             Text("all set:", style = hand(20.sp, Ink.Muted))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

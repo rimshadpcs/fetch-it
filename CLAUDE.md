@@ -662,3 +662,7 @@ reduce motion.
       on each live watch in Price watches (`Watch.dropped` = lastPrice < startPrice). Fixed: Price watches showed nothing
       because `lastCheckedAt` was typed String but Firestore timestamps decode to epoch millis (now Long; shared test). Saved for later: the buy panel has
       the watch pill too (same `WatchSheet`, the saved item's live offer + picked size).
+- [x] Rename fix (Nov 7): renaming the fetcher (and saving sizes) from You reverted, because You refreshes on open and the
+      refresh read the old profile before the (often cold, 3–6 s) setProfile finished, then "server copy wins" put it
+      back. Now refresh skips the profile while a write is in flight (`profileWrites`), and the write's own response is
+      applied when it's the latest. The name field only accepts what setProfile allows (letters, digits, space ' . -).

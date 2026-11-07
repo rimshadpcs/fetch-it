@@ -171,16 +171,28 @@ class AppState(val scope: CoroutineScope, val api: FetchApi = FetchApi()) {
     // ---- Profile ----
     // Profile: saved server-side with setProfile (the rules engine reads the sizes); the phone copy is a cache
     // so screens show it instantly and offline.
+    // While a profile write is on its way, a refresh must not put the older server copy back (You refreshes the
+    // moment Save brings you back to it, and a cold setProfile takes a few seconds).
+    private var profileWrites = 0
+
+    private fun writeProfile(call: suspend () -> Profile, onSuccess: (Profile) -> Unit = {}) {
+        profileWrites++
+        scope.launch {
+            runCatching { call() }.onSuccess { if (profileWrites == 1) applyProfile(it); onSuccess(it) } // a newer write still on its way wins
+            profileWrites--
+        }
+    }
+
     fun saveDogName(name: String) {
         cacheDogName(name.trim().ifBlank { "Scout" })
-        scope.launch { runCatching { api.setProfile(dogName = dogName) } }
+        val n = dogName
+        writeProfile({ api.setProfile(dogName = n) })
     }
 
     fun saveSizes(s: Sizes) {
         cacheSizes(s)
-        scope.launch {
-            runCatching { api.setProfile(sizes = ProfileSizes(s.top, s.waist, s.shoe, s.fit), askIfUnsure = s.askIfUnsure) }
-                .onSuccess { rules = rules?.copy(askIfUnsureAboutSize = s.askIfUnsure) }
+        writeProfile({ api.setProfile(sizes = ProfileSizes(s.top, s.waist, s.shoe, s.fit), askIfUnsure = s.askIfUnsure) }) {
+            rules = rules?.copy(askIfUnsureAboutSize = s.askIfUnsure)
         }
     }
 
@@ -230,7 +242,7 @@ class AppState(val scope: CoroutineScope, val api: FetchApi = FetchApi()) {
         runCatching {
             user = api.user()
             rules = api.rules()
-            api.profile()?.let(::applyProfile)
+            api.profile()?.let { if (profileWrites == 0) applyProfile(it) }
             places = api.places()
             monthToDate = api.monthToDate()
             activity = api.activity()
