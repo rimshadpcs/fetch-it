@@ -53,14 +53,15 @@ private val body = path("M30 62 C22 82 24 104 38 106 H66 C80 104 80 82 72 62 Z")
 private val head = path("M20 32 C19 15 61 15 60 32 C62 49 52 61 40 61 C28 61 18 49 20 32 Z")
 private val earL = path("M23 22 C10 16 3 30 7 43 C10 49 18 44 21 33 Z")
 private val earR = path("M57 22 C70 16 77 30 73 43 C70 49 62 44 59 33 Z")
-private val mouth = path("M40 48.5 V52 M34.5 51.5 Q40 57 45.5 51.5")
-private val tongue = path("M38 53.5 Q40 60 42 53.5 Z")
-private val tongueOut = path("M37.5 53.5 Q40 66 42.5 53.5 Z")
+// The face matches ScoutHero (big outlined eyes, patch behind the right one), scaled into the head.
+private val mouth = path("M40 44.8 V48.6 M35.4 47.8 Q40 52.6 44.6 47.8")
+private val tongue = path("M38.2 50.2 Q40 55.4 41.8 50.2 Z")
+private val tongueOut = path("M37.7 50.2 Q40 61 42.3 50.2 Z")
 private val collar = path("M34 64 Q51 72 68 64")
 private val tail = path("M75 96 C88 97 94 87 90 77")
 private val legs = path("M43 88 V105 M59 88 V105")
-private val closedEyeL = path("M29 35 Q32 38 35 35")
-private val closedEyeR = path("M46 34 Q49 37 52 34")
+private val closedEyeL = path("M26.6 33.8 Q31 37.6 35.4 33.8")
+private val closedEyeR = path("M44.6 33.4 Q49 37.2 53.4 33.4")
 private val bone = path("M30 50.5 C26.5 47.5 24.5 53 28.5 53.5 C24.5 54.5 27 59.5 30.5 56.5 L49.5 56.5 C53 59.5 55.5 54.5 51.5 53.5 C55.5 53 53.5 47.5 50 50.5 Z")
 private val zed = path("M0 0 H6 L0 7 H6")
 
@@ -179,24 +180,30 @@ private fun DrawScope.drawHead(p: DogPose, line: Stroke) {
     drawPath(head, ink, style = line)
     rotate(p.earL, pivot = Offset(22f, 24f)) { drawPath(earL, ink) }
     rotate(p.earR, pivot = Offset(58f, 24f)) { drawPath(earR, ink) }
-    drawOval(ink, Offset(49f - 7f, 34f - 6f), Size(14f, 12f))
+    // Eye patch behind the right eye.
+    rotate(-8f, pivot = Offset(49.5f, 33.4f)) { drawOval(ink, Offset(49.5f - 9.6f, 33.4f - 8.6f), Size(19.2f, 17.2f)) }
     if (p.eyesClosed) {
-        drawPath(closedEyeL, ink, style = Stroke(2.2f, cap = StrokeCap.Round))
-        drawPath(closedEyeR, Color.White, style = Stroke(1.8f, cap = StrokeCap.Round))
+        drawPath(closedEyeL, ink, style = Stroke(2f, cap = StrokeCap.Round))
+        drawPath(closedEyeR, Color.White, style = Stroke(2f, cap = StrokeCap.Round))
     } else {
-        val dx = 2.2f * p.look.x
-        val dy = 2f * p.look.y
-        drawCircle(Color.White, 1.5f, Offset(50f + dx, 34f + dy))
-        drawCircle(ink, 3f, Offset(32f + dx, 35f + dy))
+        val dx = 2f * p.look.x
+        val dy = 2.3f * p.look.y
+        listOf(Offset(31f, 33.6f), Offset(49.5f, 33.3f)).forEach { c ->
+            drawOval(Color.White, Offset(c.x - 5.2f, c.y - 6.3f), Size(10.4f, 12.6f))
+            drawOval(ink, Offset(c.x - 5.2f, c.y - 6.3f), Size(10.4f, 12.6f), style = Stroke(1.3f))
+            val pupil = Offset(c.x + dx, c.y + dy)
+            drawCircle(ink, 2.8f, pupil)
+            drawCircle(Color.White, 0.85f, pupil + Offset(-0.9f, -1.1f))
+        }
     }
-    scale(p.nose, pivot = Offset(40f, 45f)) { drawOval(ink, Offset(40f - 4f, 45f - 3f), Size(8f, 6f)) }
+    scale(p.nose, pivot = Offset(40f, 42.4f)) { drawOval(ink, Offset(40f - 3.8f, 42.4f - 2.5f), Size(7.6f, 5f)) }
     if (p.bone) {
-        drawPath(mouth, ink, style = Stroke(2.2f, cap = StrokeCap.Round))
+        drawPath(mouth, ink, style = Stroke(2f, cap = StrokeCap.Round))
         drawPath(bone, Color.White)
         drawPath(bone, ink, style = Stroke(2f, cap = StrokeCap.Round, join = StrokeJoin.Round))
     } else {
         drawPath(if (p.tongueOut) tongueOut else tongue, Ink.Accent)
-        drawPath(mouth, ink, style = Stroke(2.2f, cap = StrokeCap.Round))
+        drawPath(mouth, ink, style = Stroke(2f, cap = StrokeCap.Round))
     }
 }
 

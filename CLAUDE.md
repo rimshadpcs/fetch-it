@@ -614,3 +614,7 @@ inactive. No Material icons. Adding one: copy its `<path d>` values from `npm pa
          and blink, then look down at "Get started", which sits on his head; ears sway slightly. `ScoutPeek` now draws the
          same head showing only dome + ears + eyes (onboarding steps, viewfinder, Results). `ScoutFace` (old style) is only
          in the Motion lab now.
+      1c. One face everywhere (Nov 7): the full-body dog's `drawHead` (Mascot, every DogMood, RunningDog, Ready) now has the
+         ScoutHero face scaled into the head (big outlined eyes with pupils + highlight, patch behind the right eye,
+         nose, smile, tongue; closed-eye arcs for blink/sleep); the app icon (adaptive foreground + monochrome, PNG
+         mipmaps, iOS 1024) uses the same face. The notification icon is unchanged (a one-colour silhouette).

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Scout's face (the mascot's own paths, viewBox 100×112 head group), centred in the 66 dp safe zone. -->
+<!-- Scout's face (the mascot's head, with the bold big-eyed face from ScoutHero), centred in the 66 dp safe zone. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
     <group android:translateX="13.2" android:translateY="17.2" android:scaleX="0.8" android:scaleY="0.8">
@@ -9,12 +9,18 @@
             <path android:pathData="M20,32 C19,15 61,15 60,32 C62,49 52,61 40,61 C28,61 18,49 20,32 Z" android:fillColor="#FFFFFF" android:strokeColor="#111111" android:strokeWidth="2.8" />
             <path android:pathData="M23,22 C10,16 3,30 7,43 C10,49 18,44 21,33 Z" android:fillColor="#111111" />
             <path android:pathData="M57,22 C70,16 77,30 73,43 C70,49 62,44 59,33 Z" android:fillColor="#111111" />
-            <path android:pathData="M42,34 a7,6 0 1,0 14,0 a7,6 0 1,0 -14,0" android:fillColor="#111111" />
-            <path android:pathData="M48.5,34 a1.5,1.5 0 1,0 3,0 a1.5,1.5 0 1,0 -3,0" android:fillColor="#FFFFFF" />
-            <path android:pathData="M29,35 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0" android:fillColor="#111111" />
-            <path android:pathData="M36,45 a4,3 0 1,0 8,0 a4,3 0 1,0 -8,0" android:fillColor="#111111" />
-            <path android:pathData="M38,53.5 Q40,60 42,53.5 Z" android:fillColor="#E8402A" />
-            <path android:pathData="M40,48.5 V52 M34.5,51.5 Q40,57 45.5,51.5" android:strokeColor="#111111" android:strokeWidth="2.4" android:strokeLineCap="round" />
+            <group android:rotation="-8" android:pivotX="49.5" android:pivotY="33.4">
+                <path android:pathData="M39.9,33.4 a9.6,8.6 0 1,0 19.2,0 a9.6,8.6 0 1,0 -19.2,0" android:fillColor="#111111" />
+            </group>
+            <path android:pathData="M25.8,33.6 a5.2,6.3 0 1,0 10.4,0 a5.2,6.3 0 1,0 -10.4,0" android:fillColor="#FFFFFF" android:strokeColor="#111111" android:strokeWidth="1.3" />
+            <path android:pathData="M44.3,33.3 a5.2,6.3 0 1,0 10.4,0 a5.2,6.3 0 1,0 -10.4,0" android:fillColor="#FFFFFF" android:strokeColor="#111111" android:strokeWidth="1.3" />
+            <path android:pathData="M28.2,34.2 a2.8,2.8 0 1,0 5.6,0 a2.8,2.8 0 1,0 -5.6,0" android:fillColor="#111111" />
+            <path android:pathData="M46.7,33.9 a2.8,2.8 0 1,0 5.6,0 a2.8,2.8 0 1,0 -5.6,0" android:fillColor="#111111" />
+            <path android:pathData="M29.25,33.1 a0.85,0.85 0 1,0 1.70,0 a0.85,0.85 0 1,0 -1.70,0" android:fillColor="#FFFFFF" />
+            <path android:pathData="M47.75,32.8 a0.85,0.85 0 1,0 1.70,0 a0.85,0.85 0 1,0 -1.70,0" android:fillColor="#FFFFFF" />
+            <path android:pathData="M36.2,42.4 a3.8,2.5 0 1,0 7.6,0 a3.8,2.5 0 1,0 -7.6,0" android:fillColor="#111111" />
+            <path android:pathData="M38.2,50.2 Q40,55.4 41.8,50.2 Z" android:fillColor="#E8402A" />
+            <path android:pathData="M40,44.8 V48.6 M35.4,47.8 Q40,52.6 44.6,47.8" android:strokeColor="#111111" android:strokeWidth="2.2" android:strokeLineCap="round" />
         </group>
     </group>
 </vector>
