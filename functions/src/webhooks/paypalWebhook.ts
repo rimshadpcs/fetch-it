@@ -13,7 +13,7 @@ import { FieldValue, Timestamp, type DocumentReference, type DocumentSnapshot } 
 import { GEMINI_API_KEY, PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET } from "../config.js";
 import { db, userDoc } from "../lib/db.js";
 import { money } from "../rules.js";
-import { clients } from "../purchase/purchase.js";
+import { clients, spendField } from "../purchase/purchase.js";
 import type { OrderDoc } from "../fulfillment.js";
 import { notify } from "../push.js";
 import { disputeSummary, parseEvent, type Parsed, type PayPalEvent } from "./events.js";
@@ -75,7 +75,7 @@ async function onRefund(e: Extract<Parsed, { kind: "refund" }>): Promise<string>
     });
     if (full) tx.update(userDoc(uid).collection("purchases").doc(o.purchaseId), { status: "refunded", updatedAt: FieldValue.serverTimestamp() });
     if (o.spendMonth) {
-      tx.set(userDoc(uid).collection("spend").doc(o.spendMonth), { totalCents: FieldValue.increment(-amountCents), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      tx.set(userDoc(uid).collection("spend").doc(o.spendMonth), { [spendField(o.gift)]: FieldValue.increment(-amountCents), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
     }
     const amount = money(e.amount, e.currency);
     tx.set(userDoc(uid).collection("activity").doc(), {

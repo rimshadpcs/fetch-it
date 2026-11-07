@@ -62,6 +62,8 @@ export interface PurchaseDoc {
   watchId: string | null;
   /** Watch buys: the price when the user started watching (Activity strikes it through next to the new one). */
   priceWas?: number | null;
+  /** A gift: ships to someone else's saved place, with a note; paid from the gift budget (spend giftCents). */
+  gift?: { to: string; note: string | null } | null;
   decision: Decision;
   reasons: Reason[];
   productId: string;
@@ -124,6 +126,7 @@ function logActivity(tx: Transaction, uid: string, purchaseId: string, p: Partia
     source: p.source ?? "user",
     watchId: p.watchId ?? null,
     priceWas: p.priceWas ?? null,
+    gift: p.gift ?? null,
     price: p.price ?? null,
     currency: p.currency ?? null,
     imageUrl: p.imageUrl ?? null,
@@ -157,6 +160,7 @@ async function readContext(tx: Transaction, uid: string, placeId: string) {
     place,
     knownStores: storesSnap.docs.map((d) => d.data().merchant as string),
     monthToDate: ((spendSnap.data()?.totalCents as number | undefined) ?? 0) / 100,
+    giftMonthToDate: ((spendSnap.data()?.giftCents as number | undefined) ?? 0) / 100,
     vaultId: (vaultSnap.data()?.paypalVaultId as string | undefined) ?? null,
     profile: (profileSnap.data() as Profile | undefined) ?? null,
   };
@@ -164,10 +168,12 @@ async function readContext(tx: Transaction, uid: string, placeId: string) {
 
 const spendRef = (uid: string, month: string) => userDoc(uid).collection("spend").doc(month);
 /** Spend is kept in integer cents: Firestore float increments drift (212.98000000000002). */
-const reserve = (tx: Transaction, uid: string, month: string, amount: number, currency: string) =>
+/** Gifts are kept apart (giftCents) so they draw on the gift budget, not the monthly one. */
+export const spendField = (gift: unknown) => (gift ? "giftCents" : "totalCents");
+const reserve = (tx: Transaction, uid: string, month: string, amount: number, currency: string, gift: unknown = null) =>
   tx.set(
     spendRef(uid, month),
-    { totalCents: FieldValue.increment(Math.round(amount * 100)), currency, updatedAt: FieldValue.serverTimestamp() },
+    { [spendField(gift)]: FieldValue.increment(Math.round(amount * 100)), currency, updatedAt: FieldValue.serverTimestamp() },
     { merge: true },
   );
 
@@ -222,7 +228,7 @@ export async function charge(uid: string, ref: DocumentReference, canClaim: Clai
         vaultId: start.vaultId,
         amount: p.price!,
         currency: p.currency,
-        description: `${p.title} (${p.merchant}) · Fetch It demo store`,
+        description: `${p.gift ? `Gift for ${p.gift.to}: ` : ""}${p.title} (${p.merchant}) · Fetch It demo store`,
         shipTo: p.shipTo,
       });
     outcome =
@@ -245,7 +251,7 @@ export async function charge(uid: string, ref: DocumentReference, canClaim: Clai
     if (outcome.status === "completed") {
       tx.set(userDoc(uid).collection("stores").doc(p.merchant), { merchant: p.merchant, lastPurchaseAt: FieldValue.serverTimestamp() }, { merge: true });
     } else if (p.spendMonth) {
-      reserve(tx, uid, p.spendMonth, -p.price!, p.currency); // release the reservation
+      reserve(tx, uid, p.spendMonth, -p.price!, p.currency, p.gift); // release the reservation
     }
     logActivity(tx, uid, ref.id, done);
     if (order && !order.exists) placeDemoOrder(tx, uid, ref.id, done);
@@ -280,6 +286,7 @@ const response = (id: string, p: PurchaseDoc) => ({
   price: p.price,
   currency: p.currency,
   size: p.size,
+  gift: p.gift ?? null,
   undoUntil: p.undoUntil instanceof Timestamp ? p.undoUntil.toMillis() : null,
   paypalOrderId: p.paypalOrderId,
   error: p.error,
@@ -311,6 +318,8 @@ export async function startPurchase(
     watchId?: string;
     /** The price before it dropped (watch buys). */
     priceWas?: number | null;
+    /** A gift for whoever the place belongs to, with an optional note. */
+    gift?: { note: string | null } | null;
     /** Client-generated id for this one Buy tap; becomes the purchase id. A repeat returns the same purchase. */
     requestId?: string;
     onDecision?: (r: PurchaseResponse) => unknown;
@@ -346,7 +355,9 @@ export async function startPurchase(
     const existing = await tx.get(ref);
     if (existing.exists) return { doc: existing.data() as PurchaseDoc, replayed: true };
     const ctx = await readContext(tx, uid, opts.placeId);
+    const gift = opts.gift ? { to: giftTo(ctx.place), note: opts.gift.note } : null;
     const { decision, reasons, size } = decide({
+      gift: gift && { to: gift.to, monthToDate: ctx.giftMonthToDate },
       rules: ctx.rules,
       monthToDate: ctx.monthToDate,
       offer: live,
@@ -373,6 +384,7 @@ export async function startPurchase(
       source: opts.source,
       watchId: opts.watchId ?? null,
       priceWas: opts.priceWas ?? null,
+      gift,
       size,
       price: live.price,
       currency: live.currency,
@@ -389,7 +401,7 @@ export async function startPurchase(
       updatedAt: FieldValue.serverTimestamp(),
     };
     tx.set(ref, doc);
-    if (decision === "AUTO_BUY") reserve(tx, uid, ctx.month, live.price!, live.currency);
+    if (decision === "AUTO_BUY") reserve(tx, uid, ctx.month, live.price!, live.currency, gift);
     logActivity(tx, uid, ref.id, doc);
     return { doc, replayed: false };
   });
@@ -429,17 +441,21 @@ export async function startPurchase(
  * Buy an offer from fetchItem. Streams the decision immediately (so the app can show Undo), then for an
  * auto-buy waits out the undo window and charges; the final result carries the PayPal order id.
  */
-export const purchaseOffer = onCall<{ offerId: string; size?: string; placeId: string; requestId: string }, Promise<PurchaseResponse>, PurchaseResponse>(
+export const purchaseOffer = onCall<{ offerId: string; size?: string; placeId: string; requestId: string; gift?: { note?: string | null } }, Promise<PurchaseResponse>, PurchaseResponse>(
   { secrets, timeoutSeconds: 60, cors: true, enforceAppCheck: ENFORCE_APP_CHECK, minInstances: DEMO_MIN_INSTANCES },
   async (request, res) => {
     const uid = requireUid(request.auth?.uid);
-    const { offerId, size, placeId, requestId } = request.data ?? {};
+    const { offerId, size, placeId, requestId, gift } = request.data ?? {};
+    if (gift !== undefined && gift !== null && (typeof gift !== "object" || (gift.note != null && (typeof gift.note !== "string" || gift.note.length > 200)))) {
+      throw new HttpsError("invalid-argument", "gift.note must be text, 200 characters at most.");
+    }
     if (typeof placeId !== "string" || !placeId) throw new HttpsError("invalid-argument", "placeId is required.");
     if (size !== undefined && typeof size !== "string") throw new HttpsError("invalid-argument", "size must be a string.");
     if (!isRequestId(requestId)) throw new HttpsError("invalid-argument", "requestId is required: 16–40 letters and digits, new for each Buy tap.");
     const claim = verifyOffer(offerId, uid);
     await rateLimit(uid, "purchaseOffer");
-    return startPurchase(uid, claim, { placeId, size, requestId, source: "user", onDecision: (r) => res?.sendChunk(r) });
+    const giftOpt = gift ? { note: gift.note?.trim() || null } : null;
+    return startPurchase(uid, claim, { placeId, size, requestId, gift: giftOpt, source: "user", onDecision: (r) => res?.sendChunk(r) });
   },
 );
 
@@ -477,6 +493,7 @@ export const approvePurchase = onCall<{ purchaseId: string; allowCategory?: bool
       const input = {
         rules: ctx.rules,
         monthToDate: ctx.monthToDate,
+        gift: cur.gift ? { to: cur.gift.to, monthToDate: ctx.giftMonthToDate } : null,
         offer: live,
         size: cur.size,
         profile: ctx.profile,
@@ -515,7 +532,7 @@ export const approvePurchase = onCall<{ purchaseId: string; allowCategory?: bool
         updatedAt: FieldValue.serverTimestamp(),
       };
       tx.update(ref, update);
-      if (status === "approved") reserve(tx, uid, ctx.month, live.price!, live.currency);
+      if (status === "approved") reserve(tx, uid, ctx.month, live.price!, live.currency, cur.gift);
       logActivity(tx, uid, ref.id, { ...cur, ...update });
       return { ...cur, ...update } as PurchaseDoc;
     });
@@ -540,7 +557,7 @@ export const undoPurchase = onCall<{ purchaseId: string }, Promise<PurchaseRespo
         // A little grace for the round trip; the charge itself only starts after this check fails.
         if (Date.now() > cur.undoUntil!.toMillis() + 500) throw new HttpsError("failed-precondition", "Too late to undo: it's already being paid.");
         status = "undone";
-        if (cur.spendMonth) reserve(tx, uid, cur.spendMonth, -cur.price!, cur.currency);
+        if (cur.spendMonth) reserve(tx, uid, cur.spendMonth, -cur.price!, cur.currency, cur.gift);
       } else if (cur.status === "needs_approval") {
         status = "declined";
       } else {
@@ -561,6 +578,12 @@ function purchaseRef(uid: string, purchaseId: unknown) {
   }
   return userDoc(uid).collection("purchases").doc(purchaseId);
 }
+
+/** Who a gift is for: the place's name ("Mom"), else the person on it. */
+const giftTo = (place: Place | null) => {
+  const label = place?.label?.trim();
+  return label && !/^(home|work|other)$/i.test(label) ? label : place?.fullName?.split(" ")[0] || "them";
+};
 
 const toAddress = (p: Place): ShippingAddress => ({
   fullName: p.fullName,

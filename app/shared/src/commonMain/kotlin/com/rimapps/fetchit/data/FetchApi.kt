@@ -89,12 +89,13 @@ class FetchApi(val firebase: Firebase = Firebase(httpClient())) {
 
     // ---- Buy ----
     /** Streams the rules decision first ([onDecision]), then for an auto-buy waits out the undo window and pays. */
-    suspend fun purchaseOffer(offerId: String, placeId: String, size: String?, requestId: String, onDecision: (Purchase) -> Unit): Purchase {
+    suspend fun purchaseOffer(offerId: String, placeId: String, size: String?, requestId: String, giftNote: String? = null, gift: Boolean = false, onDecision: (Purchase) -> Unit): Purchase {
         val data = buildJsonObject {
             put("offerId", offerId)
             put("placeId", placeId)
             put("requestId", requestId)
             size?.let { put("size", it) }
+            if (gift) put("gift", buildJsonObject { giftNote?.let { put("note", it) } })
         }
         return firebase.stream("purchaseOffer", data) { onDecision(it.to()) }.to()
     }

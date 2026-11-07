@@ -443,13 +443,16 @@ private fun ResultsFor(app: AppState, s: FetchSession, r: FetchResponse) {
     val place = app.savedPlaces.firstOrNull { it.placeId == placeId } ?: app.defaultPlace
     var picking by remember { mutableStateOf(false) }
     var watching by remember { mutableStateOf(false) }
+    // Send as a gift: ships to that person's saved place, from the gift budget.
+    var gift by remember { mutableStateOf<GiftChoice?>(null) }
+    var gifting by remember { mutableStateOf(false) }
     // Buy only counts a press that starts after this screen has been on the display for a moment: a tap aimed
     // at the screen underneath (the Fetch "+" sits where Buy lands) must never buy. Measured from the first
     // draw, not composition, because a slow device can compose long before it shows anything. Closing the
     // place sheet re-arms it the same way (the sheet's rows sit above Buy).
     var drawn by remember { mutableStateOf(false) }
     var armed by remember { mutableStateOf(false) }
-    LaunchedEffect(drawn, picking, watching) { armed = false; if (drawn && !picking && !watching) { delay(800); armed = true } }
+    LaunchedEffect(drawn, picking, watching, gifting) { armed = false; if (drawn && !picking && !watching && !gifting) { delay(800); armed = true } }
 
     // Scout (peeking over the Buy bar) looks wherever the user last tapped.
     var rootOrigin by remember { mutableStateOf(Offset.Zero) }
@@ -583,6 +586,7 @@ private fun ResultsFor(app: AppState, s: FetchSession, r: FetchResponse) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
                 // Watch the price instead of buying now (one watch per item; tapping again changes or stops it).
                 if (offer != null) WatchChip(app.watchFor(offer), onClick = { watching = true }, modifier = Modifier.padding(bottom = 4.dp))
+                if (offer != null) GiftChip(gift, onClick = { gifting = true }, modifier = Modifier.padding(start = 8.dp, bottom = 4.dp))
                 Spacer(Modifier.weight(1f))
                 ScoutPeek(
                     54.dp, Modifier.padding(end = 18.dp)
@@ -600,18 +604,19 @@ private fun ResultsFor(app: AppState, s: FetchSession, r: FetchResponse) {
                 Modifier.fillMaxWidth().height(64.dp).shadow(8.dp, RoundedCornerShape(999.dp)).clip(RoundedCornerShape(999.dp)).background(Ink.White).padding(4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Column(Modifier.widthIn(max = 120.dp).clip(RoundedCornerShape(999.dp)).clickable(role = Role.Button) { picking = true }.padding(start = 16.dp, end = 10.dp, top = 6.dp, bottom = 6.dp)) {
+                Column(Modifier.widthIn(max = 120.dp).clip(RoundedCornerShape(999.dp)).clickable(role = Role.Button) { if (gift != null) gifting = true else picking = true }.padding(start = 16.dp, end = 10.dp, top = 6.dp, bottom = 6.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                         DoodleIcon(Doodle.MapPin, null, size = 13.dp, color = Ink.Grey, strokeWidth = 4.6f)
-                        Text("ship to ▾", style = body(11.sp, FontWeight.SemiBold, Ink.Grey))
+                        Text(if (gift != null) "gift to ▾" else "ship to ▾", style = body(11.sp, FontWeight.SemiBold, Ink.Grey))
                     }
-                    Text(place?.label ?: "add address", style = body(16.sp, FontWeight.SemiBold), maxLines = 1)
+                    Text(gift?.to ?: place?.label ?: "add address", style = body(16.sp, FontWeight.SemiBold), maxLines = 1)
                 }
                 Box(
                     Modifier.weight(1f).height(56.dp).clip(RoundedCornerShape(999.dp)).background(Ink.Ink)
                         .drawWithContent { drawContent(); drawn = true }
                         .buyGesture(enabled = armed && offer != null && place != null) {
-                            app.go(Screen.Buying(offer!!, size, newRequestId(), place!!.placeId))
+                            val g = gift
+                            app.go(if (g != null) Screen.Buying(offer!!, size, newRequestId(), g.placeId, g.note) else Screen.Buying(offer!!, size, newRequestId(), place!!.placeId))
                         },
                     contentAlignment = Alignment.Center,
                 ) {
@@ -624,6 +629,7 @@ private fun ResultsFor(app: AppState, s: FetchSession, r: FetchResponse) {
         }
         PlacePickerSheet(app, picking, place?.placeId, onPick = { placeId = it.placeId; picking = false }, onDismiss = { picking = false })
         WatchSheet(app, watching, offer, size, place?.placeId, onDismiss = { watching = false })
+        GiftSheet(app, gifting, gift, onPick = { gift = it; gifting = false }, onDismiss = { gifting = false })
     }
 }
 

@@ -70,20 +70,22 @@ sealed interface Screen {
     data object WhichOne : Screen
     data object Results : Screen
     /** [requestId] is made once per Buy tap; see AppState.buy. [placeId]: where it ships (picked on Results). */
-    data class Buying(val offer: Offer, val size: String?, val requestId: String, val placeId: String) : Screen
+    /** [gift]: send it as a gift to [placeId]'s person, with this note ("" = no note). */
+    data class Buying(val offer: Offer, val size: String?, val requestId: String, val placeId: String, val gift: String? = null) : Screen
     data class Approve(val purchaseId: String) : Screen
     data class Done(val purchaseId: String) : Screen
     data class Order(val purchaseId: String) : Screen
 }
 
 /** Which part of the Rules screen a "Change rule" link opens at. */
-enum class RuleFocus { Budget, PerItem, Categories, Asks;
+enum class RuleFocus { Budget, PerItem, Categories, Asks, Gifts;
     companion object {
         /** The setting behind a rules-engine check id (functions/src/rules.ts), if it's on the Rules screen. */
         fun forRule(rule: String): RuleFocus? = when (rule) {
             "monthly_budget" -> Budget
             "per_item_limit" -> PerItem
             "category" -> Categories
+            "gift_budget" -> Gifts
             "new_store", "size" -> Asks
             else -> null
         }
@@ -492,10 +494,10 @@ class AppState(val scope: CoroutineScope, val api: FetchApi = FetchApi()) {
      * screen can't start another), keyed by the tap's requestId, which the server also uses as the purchase id.
      */
     private val buys = mutableMapOf<String, Deferred<Purchase>>()
-    fun buy(offer: Offer, placeId: String, size: String?, requestId: String, onDecision: (Purchase) -> Unit): Deferred<Purchase> =
+    fun buy(offer: Offer, placeId: String, size: String?, requestId: String, gift: String? = null, onDecision: (Purchase) -> Unit): Deferred<Purchase> =
         buys.getOrPut(requestId) {
             scope.async {
-                api.purchaseOffer(offer.offerId, placeId, size, requestId) { onDecision(it); remember(it) }.also { remember(it); refresh() }
+                api.purchaseOffer(offer.offerId, placeId, size, requestId, gift?.takeIf { it.isNotBlank() }, gift != null) { onDecision(it); remember(it) }.also { remember(it); refresh() }
             }
         }
 

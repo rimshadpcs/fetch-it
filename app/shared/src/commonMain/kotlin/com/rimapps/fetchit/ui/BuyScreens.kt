@@ -68,7 +68,7 @@ fun BuyingScreen(app: AppState, screen: Screen.Buying) {
     LaunchedEffect(screen.requestId) {
         try {
             // Re-entering this screen joins the same call instead of starting another (AppState.buy).
-            val final = app.buy(screen.offer, screen.placeId, screen.size, screen.requestId) { decision ->
+            val final = app.buy(screen.offer, screen.placeId, screen.size, screen.requestId, screen.gift) { decision ->
                 if (decision.status == "needs_approval") app.replace(Screen.Approve(decision.purchaseId)) else purchase = decision
             }.await()
             if (final.status != "needs_approval") purchase = final
@@ -195,6 +195,12 @@ private fun Bought(app: AppState, p: Purchase) {
             "${p.title.take(40)} · ${p.retailer ?: p.merchant} · paid with PayPal",
             style = body(14.sp, color = Ink.NavGrey), textAlign = TextAlign.Center, maxLines = 2, modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
         )
+        p.gift?.let { g ->
+            Text(
+                "a gift for ${g.to}" + (g.note?.let { " · \u201c$it\u201d" } ?: ""), style = hand(20.sp, Ink.Accent),
+                textAlign = TextAlign.Center, maxLines = 2, modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+            )
+        }
         Text("Demo store · sandbox", style = hand(17.sp, Ink.Muted), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
         Text(
             "what goes with it? ›", style = hand(20.sp), textAlign = TextAlign.Center,

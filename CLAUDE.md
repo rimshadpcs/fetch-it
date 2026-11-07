@@ -103,7 +103,8 @@ KMP app ──Firebase Auth──▶ Cloud Functions (TypeScript)
 | `cancelOrder` ✅ | `{orderId}` before shipping: refund the sandbox capture, `cancelled`, roll back month-to-date spend |
 | `sweepStuckPurchases` ✅ | every 5 min: purchases stuck > 2 min in pending_undo/approved/charging → charge (idempotent) or fail |
 | `advanceOrder` · `runMaintenance` 🐞 | debug only (emulator or `ALLOW_DEBUG=true`): fast-forward an order; run both sweeps now |
-| `paypalWebhook` | verify signature, update activity |
+| `paypalWebhook` ✅ | verify with PayPal, once per event (`paypalEvents/{id}`): refund/reversal made in PayPal → order stopped if unshipped, purchase refunded, spend rolled back; dispute → activity (opened: Scout reads it with the PayPal Agent Toolkit); vault token deleted → unlinked; our own Cancel refunds recognised |
+| `completeLook` ✅ | `{purchaseId}` → "goes well with": ≤ 3 ideas (Flash-Lite) × 2 Channel3 offers (≤ 3× the item / $100), signed; cached on the purchase 20 h |
 
 Activity is written by Functions and read by the app directly from Firestore.
 
@@ -490,7 +491,7 @@ reduce motion.
       there). To see `VALID` verdicts from your own debug build, allow-list its debug token (DEPLOY.md → App Check).
       The app skips App Check for 5 min after a failed token fetch, so a sideloaded release isn't slowed by the 4 s
       timeout on every call.
-- [ ] PayPal webhooks
+- [~] PayPal webhooks (Nov 8): see the end of this list
 - [x] App, Android (Oct 26, Pixel_4 emulator against production): onboarding → fetch → results → buy/approve → activity.
       Firebase over plain REST from shared Kotlin (`shared/.../data/Firebase.kt`): **anonymous** sign-in (provider enabled
       in fetchit-437a0; PayPal is the real identity), callable functions incl. SSE streaming (fetchItem `items` chunk →
@@ -693,3 +694,31 @@ reduce motion.
       between the check and the fetch. Tests: `npm test` (+3, 51 total), `test/linkphoto.mjs` (emulators: the user's pin →
       99 KB JPEG in 4.5 s, wayfair.com → its preview image, Instagram hint, 169.254.169.254 / localhost refused).
       Deployed Nov 8 (linkPhoto, watchOffer, checkWatches, checkWatchesNow); not seen on a device.
+- [~] Webhooks, Agent Toolkit, Goes well with, Gift mode (Nov 8). Not deployed; not seen on a device.
+      - **paypalWebhook** (`src/webhooks/`): `events.ts` parses PAYMENT.CAPTURE.COMPLETED/DENIED/REFUNDED/REVERSED,
+        CUSTOMER.DISPUTE.CREATED/UPDATED/RESOLVED, VAULT.PAYMENT-TOKEN.DELETED (refund → capture via its `up` link; dispute →
+        `disputed_transactions[].seller_transaction_id`). Orders found by `paypalCaptureId` (collection-group field override in
+        firestore.indexes.json). Verification: `POST /v1/notifications/verify-webhook-signature` with param PAYPAL_WEBHOOK_ID
+        (unset = everything refused; only the emulator skips it). Register once: `npm run webhook:register` (prints the id
+        for `.env.fetchit-437a0`). A refund while the order is `cancelling` or with our refund id = ours, ignored.
+        Tests: `npm test` (+3), `npm run test:webhook` (emulators, 6: refund stops order + spend, duplicate delivery, same
+        refund in a new event, own refund, dispute fallback note, unlink). App: labels Dispute opened/closed, PayPal unlinked
+        (+ "Link PayPal again"), "read from PayPal with the PayPal Agent Toolkit".
+      - **PayPal Agent Toolkit** (`@paypal/agent-toolkit` 1.11.0, OpenAI-format tools → Gemini function declarations,
+        `webhooks/disputeAgent.ts`, loaded lazily): on a new dispute, Gemini 3.6 Flash calls the toolkit's read-only
+        `get_dispute` / `get_order` and writes the Activity note; anything else (unknown tool, dispute not found) → template.
+        `node spikes/dispute-agent.mjs [id]`: sandbox auth works (list_disputes: none open), get_dispute called, fallback ok.
+        A real dispute needs fetchBuyer to open one in the sandbox Resolution Center.
+      - **completeLook**: lamp → bulbs / brass tray / pillar candles etc., 9 s first call (cached after). `npm test` (+2),
+        `test/look.mjs`. App: `ui/Look.kt` "goes well with" on the Order screen (tap a card → price, sizes, Buy armed after
+        0.8 s, ships to the default place); Bought screen links "what goes with it? ›".
+      - **Gift mode**: rules `giftBudget` (0 = off; setRules keeps the saved one when an old app omits it); `purchaseOffer
+        {gift: {note?}}` ships to that saved place; `gift {to, note}` on purchase, order, activity; `to` = place label unless
+        Home/Work/Other, else first name. Rules engine: gift_budget instead of monthly_budget (block), never the user's saved
+        size ("Which size for Mom?" asks). Spend: gifts in `spend/{month}.giftCents` (`spendField`), released by undo /
+        failure / cancel / webhook refund. PayPal description "Gift for Mom: …". Tests: `npm test` (+2, 58 total),
+        `test/gift.mjs` (emulators + sandbox, 4: normal buy blocked at $290/$300 but the gift goes through on the gift budget,
+        PayPal `28A36887K8149803N`, shipped to Jane Doe, note on the order; 2nd gift over $50 → blocked; cancel → giftCents 0).
+        App: Rules "Gifts for other people" amount; Results "gift" chip → `GiftSheet` (pick a saved place, note ≤ 200,
+        "+ add someone's address"); Buy bar says "gift to ▾ Mom"; Bought + Activity show "a gift for Mom". Saved / Goes well
+        with buy panels don't offer gifts yet.

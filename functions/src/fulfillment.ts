@@ -16,7 +16,7 @@ import type { ShippingAddress } from "./lib/paypal.js";
 import { money } from "./rules.js";
 import { PayPalError } from "./lib/paypal.js";
 import { paypalFailure } from "./lib/paypalErrors.js";
-import { clients, MERCHANT_OF_RECORD, RETAILER_ORDER_STATUS, requireUid, type PurchaseDoc } from "./purchase/purchase.js";
+import { clients, MERCHANT_OF_RECORD, RETAILER_ORDER_STATUS, requireUid, spendField, type PurchaseDoc } from "./purchase/purchase.js";
 
 // Timings, overridable per environment (functions/.env or .env.local).
 const CONFIRM_AFTER_SECONDS = defineInt("FULFILLMENT_CONFIRM_AFTER_SECONDS", { default: 30 });
@@ -49,6 +49,7 @@ export interface OrderDoc {
   /** Tracking pushed to the PayPal sandbox transaction (Orders v2 /track). */
   paypalTracking: { status: "pending" | "added" | "failed"; trackerId?: string | null; error?: string | null } | null;
   refund: { id: string; status: string; amountCents: number } | null;
+  gift?: { to: string; note: string | null } | null;
   /** Spend month this order counts against, so a cancel can roll it back. */
   spendMonth: string | null;
   statusHistory: { status: OrderStatus; at: Timestamp }[];
@@ -57,10 +58,12 @@ export interface OrderDoc {
 }
 
 const SUMMARY: Record<OrderStatus, (o: OrderDoc) => string> = {
-  placed: (o) => `Order ${o.retailerOrderId} placed with ${o.retailer} (demo store · sandbox). Arrives ${weekday(o.promisedDeliveryDate)}.`,
+  placed: (o) =>
+    `${o.gift ? `Gift for ${o.gift.to}: order` : "Order"} ${o.retailerOrderId} placed with ${o.retailer} (demo store · sandbox). Arrives ${weekday(o.promisedDeliveryDate)}.` +
+    (o.gift?.note ? ` Note: "${o.gift.note}"` : ""),
   confirmed: (o) => `${o.retailer} confirmed order ${o.retailerOrderId} (simulated).`,
   shipped: (o) => `Shipped with ${o.carrier?.name}, tracking ${o.trackingNumber} (simulated).`,
-  delivered: (o) => `Delivered to ${o.shipTo?.label ?? "your place"} (simulated).`,
+  delivered: (o) => (o.gift ? `Delivered to ${o.gift.to} (simulated).` : `Delivered to ${o.shipTo?.label ?? "your place"} (simulated).`),
   cancelling: () => "Cancelling…",
   cancelled: (o) => `Cancelled. ${money((o.refund?.amountCents ?? o.totalCents) / 100, o.currency)} refunded to your PayPal.`,
 };
@@ -77,6 +80,7 @@ function orderActivity(tx: Transaction, uid: string, orderId: string, o: OrderDo
     status: o.status,
     summary: SUMMARY[o.status](o),
     title: o.items[0]?.title ?? null,
+    gift: o.gift ?? null,
     retailer: o.retailer,
     retailerOrderId: o.retailerOrderId,
     merchantOfRecord: o.merchantOfRecord,
@@ -123,6 +127,7 @@ export function placeDemoOrder(tx: Transaction, uid: string, purchaseId: string,
     trackingNumber: null,
     paypalTracking: null,
     refund: null,
+    gift: p.gift ?? null,
     spendMonth: p.spendMonth,
     statusHistory: [{ status: "placed", at: now }],
     placedAt: now,
@@ -280,7 +285,7 @@ export const cancelOrder = onCall<{ orderId: string }>({ secrets: fulfilmentSecr
       if (before.spendMonth) {
         tx.set(
           userDoc(uid).collection("spend").doc(before.spendMonth),
-          { totalCents: FieldValue.increment(-amountCents), updatedAt: FieldValue.serverTimestamp() },
+          { [spendField(before.gift)]: FieldValue.increment(-amountCents), updatedAt: FieldValue.serverTimestamp() },
           { merge: true },
         );
       }
@@ -328,5 +333,6 @@ const publicOrder = (id: string, o: OrderDoc) => ({
   trackingNumber: o.trackingNumber,
   paypalTracking: o.paypalTracking,
   refund: o.refund,
+  gift: o.gift ?? null,
   statusHistory: o.statusHistory.map((h) => ({ status: h.status, at: h.at.toMillis() })),
 });

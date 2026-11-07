@@ -461,6 +461,15 @@ fun RulesEditor(initial: HouseRules, focus: RuleFocus? = null, onChange: (HouseR
                 }
             }
         }
+        PaperNote(tilt = -0.5f, modifier = Modifier.fillMaxWidth().rulesSection(focus == RuleFocus.Gifts)) {
+            Text("Gifts for other people", style = hand(22.sp))
+            AmountField(r.giftBudget, { update(r.copy(giftBudget = it)) }, " a month", style = body(28.sp, FontWeight.Medium))
+            Text(
+                if (r.giftBudget <= 0) "Off: I won't send gifts. Set an amount to send things to Mom, friends…"
+                else "Gifts come out of this, not your monthly budget. They ship to their saved place, with your note.",
+                style = body(13.sp, color = Ink.Muted),
+            )
+        }
         PaperNote(tilt = 0.5f, modifier = Modifier.fillMaxWidth().rulesSection(focus == RuleFocus.Asks)) {
             Toggle("Ask before a new store", r.askBeforeNewStore) { update(r.copy(askBeforeNewStore = it)) }
             Toggle("Ask if I'm unsure about size", r.askIfUnsureAboutSize) { update(r.copy(askIfUnsureAboutSize = it)) }

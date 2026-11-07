@@ -30,6 +30,10 @@ export const setRules = onCall<Partial<HouseRules>>({ cors: true, enforceAppChec
     askBeforeNewStore: bool(d.askBeforeNewStore, "askBeforeNewStore"),
     onlyShipToSavedPlaces: bool(d.onlyShipToSavedPlaces, "onlyShipToSavedPlaces"),
     askIfUnsureAboutSize: bool(d.askIfUnsureAboutSize, "askIfUnsureAboutSize"),
+    // Older app builds don't send it: keep what's saved.
+    giftBudget: d.giftBudget === undefined
+      ? (((await userDoc(uid).collection("settings").doc("rules").get()).data()?.giftBudget as number | undefined) ?? 0)
+      : num(d.giftBudget, "giftBudget", 100_000),
   };
   await userDoc(uid).collection("settings").doc("rules").set({ ...rules, updatedAt: FieldValue.serverTimestamp() });
   // Ask-if-unsure lives in the profile too (the Sizes screen sets it); keep the two the same.

@@ -10,6 +10,8 @@ export interface HouseRules {
   askBeforeNewStore: boolean;
   onlyShipToSavedPlaces: boolean;
   askIfUnsureAboutSize: boolean;
+  /** Monthly budget for gifts (shipped to someone else). Gifts count here, not against monthlyBudget. 0/unset = no gifts. */
+  giftBudget?: number;
 }
 
 /** users/{uid}/profile/main: the user's sizes, saved with setProfile. */
@@ -67,6 +69,8 @@ export interface RulesInput {
   paymentLinked: boolean;
   /** Approval already given for this purchase: "ask" reasons stop blocking the auto-buy. */
   approved?: boolean;
+  /** A gift for someone else: checked against the gift budget, and never assumes the user's own size. */
+  gift?: { to: string; monthToDate: number } | null;
 }
 
 export type Decision = "AUTO_BUY" | "NEEDS_APPROVAL" | "BLOCKED";
@@ -126,6 +130,32 @@ export function decide(input: RulesInput): { decision: Decision; reasons: Reason
   // Money (skipped when there's no live price: in_stock already blocks)
   if (offer.price !== null) addMoney(offer.price);
   function addMoney(price: number) {
+  if (input.gift) {
+    const budget = rules.giftBudget ?? 0;
+    const giftAfter = input.gift.monthToDate + price;
+    const ok = budget > 0 && giftAfter <= budget + 1e-9;
+    add(
+      "gift_budget",
+      ok,
+      "block",
+      budget <= 0
+        ? "Set a gift budget in your house rules first"
+        : ok
+          ? `${m(giftAfter)} of your ${m(budget)} gift budget after this`
+          : `${m(giftAfter - budget)} over your ${m(budget)} gift budget (${m(input.gift.monthToDate)} on gifts so far)`,
+    );
+  } else addBudget(price);
+  const withinLimit = price <= rules.perItemLimit + 1e-9;
+  add(
+    "per_item_limit",
+    withinLimit,
+    "ask",
+    withinLimit
+      ? `${m(price)} is within your ${m(rules.perItemLimit)} limit`
+      : `${m(price - rules.perItemLimit)} over your ${m(rules.perItemLimit)} limit`,
+  );
+  }
+  function addBudget(price: number) {
   const after = monthToDate + price;
   const withinBudget = after <= rules.monthlyBudget + 1e-9;
   add(
@@ -135,15 +165,6 @@ export function decide(input: RulesInput): { decision: Decision; reasons: Reason
     withinBudget
       ? `${m(after)} of your ${m(rules.monthlyBudget)} monthly budget after this`
       : `${m(after - rules.monthlyBudget)} over your ${m(rules.monthlyBudget)} monthly budget (${m(monthToDate)} spent so far)`,
-  );
-  const withinLimit = price <= rules.perItemLimit + 1e-9;
-  add(
-    "per_item_limit",
-    withinLimit,
-    "ask",
-    withinLimit
-      ? `${m(price)} is within your ${m(rules.perItemLimit)} limit`
-      : `${m(price - rules.perItemLimit)} over your ${m(rules.perItemLimit)} limit`,
   );
   }
 
@@ -163,7 +184,8 @@ export function decide(input: RulesInput): { decision: Decision; reasons: Reason
   // Size: the one asked for, else the saved size for this kind of item.
   if (offer.sizes) {
     const asked = input.size?.trim() || null;
-    const saved = asked ? null : profileSize(offer.categoryPath, input.profile);
+    // A gift is for someone else: the user's saved sizes don't apply.
+    const saved = asked || input.gift ? null : profileSize(offer.categoryPath, input.profile);
     const wanted = asked ?? saved;
     const whose = saved ? "Your size" : "Size";
     const match = wanted ? offer.sizes.find((s) => sameSize(wanted, s)) : undefined;
@@ -174,6 +196,8 @@ export function decide(input: RulesInput): { decision: Decision; reasons: Reason
       add("size", false, "block", `${whose} ${match.label} is sold out`);
     } else if (match) {
       add("size", true, "ask", `${whose} ${match.label} is ${match.available === "InStock" ? "in stock" : "available"}`);
+    } else if (input.gift) {
+      add("size", false, "ask", `Which size for ${input.gift.to}?`);
     } else if (input.profile?.askIfUnsure ?? rules.askIfUnsureAboutSize) {
       add("size", false, "ask", "I'm not sure which size you want");
     } else {

@@ -183,3 +183,26 @@ test("no saved size: the profile's askIfUnsure decides between asking and blocki
   assert.equal(r.decision, "BLOCKED");
   assert.equal(msg(r, "size"), "Pick a size first");
 });
+
+test("gift: checked against the gift budget (not the monthly one); no gift budget → blocked", () => {
+  const mom = { ...base, place: { id: "mom", label: "Mom" }, monthToDate: 299, rules: { ...rules, giftBudget: 100 } };
+  const ok = decide({ ...mom, gift: { to: "Mom", monthToDate: 20 } });
+  assert.equal(ok.decision, "AUTO_BUY");
+  assert.equal(msg(ok, "gift_budget"), "$62 of your $100 gift budget after this");
+  assert.equal(ok.reasons.some((r) => r.rule === "monthly_budget"), false, "a gift doesn't touch the monthly budget");
+  const over = decide({ ...mom, gift: { to: "Mom", monthToDate: 80 } });
+  assert.equal(over.decision, "BLOCKED");
+  assert.equal(msg(over, "gift_budget"), "$22 over your $100 gift budget ($80 on gifts so far)");
+  const none = decide({ ...mom, rules, gift: { to: "Mom", monthToDate: 0 } });
+  assert.equal(msg(none, "gift_budget"), "Set a gift budget in your house rules first");
+  assert.equal(none.decision, "BLOCKED");
+});
+
+test("gift: never uses the user's own saved size; asks which size for them", () => {
+  const shirt = { ...lamp, categoryPath: ["apparel-accessories", "clothing", "shirts-tops"], sizes: [{ label: "S", size: "S", available: "InStock" }, { label: "M", size: "M", available: "InStock" }] };
+  const r = decide({ ...base, offer: shirt, rules: { ...rules, giftBudget: 100 }, profile: { sizes: { top: "M" } }, gift: { to: "Mom", monthToDate: 0 } });
+  assert.equal(r.decision, "NEEDS_APPROVAL");
+  assert.equal(msg(r, "size"), "Which size for Mom?");
+  const picked = decide({ ...base, offer: shirt, size: "S", rules: { ...rules, giftBudget: 100 }, gift: { to: "Mom", monthToDate: 0 } });
+  assert.equal(picked.decision, "AUTO_BUY");
+});

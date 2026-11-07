@@ -71,6 +71,7 @@ data class Reason(val rule: String, val pass: Boolean, val onFail: String, val m
 data class Purchase(
     val purchaseId: String,
     val status: String,
+    val gift: Gift? = null,
     val decision: String? = null,
     val summary: String = "",
     val reasons: List<Reason> = emptyList(),
@@ -135,7 +136,13 @@ data class HouseRules(
     val askBeforeNewStore: Boolean = true,
     val onlyShipToSavedPlaces: Boolean = true,
     val askIfUnsureAboutSize: Boolean = true,
+    /** Monthly budget for gifts (shipped to someone else); 0 = no gifts. */
+    val giftBudget: Double = 0.0,
 )
+
+/** A gift: who it's for (the place's name) and the note that goes with it. */
+@Serializable
+data class Gift(val to: String = "", val note: String? = null)
 
 /** users/{uid}/orders/{purchaseId}: the simulated order behind a completed purchase. */
 @Serializable
@@ -272,6 +279,7 @@ data class ActivityEntry(
     val placeLabel: String? = null,
     val promisedDeliveryDate: String? = null,
     val trackingNumber: String? = null,
+    val gift: Gift? = null,
     /** Set when Scout wrote [summary] from PayPal's own data (dispute read with the PayPal Agent Toolkit). */
     val summarizedBy: String? = null,
     /** Epoch millis (Firestore timestampValue). */

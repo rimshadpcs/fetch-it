@@ -175,6 +175,7 @@ private fun ActivityCard(app: AppState, e: ActivityEntry, tilt: Float) {
                     Text(timeAgo(e.createdAt), style = serif(15.sp, Ink.Muted))
                 }
                 e.title?.let { Text(it.lowercase(), style = hand(19.sp), maxLines = 2) }
+                e.gift?.let { Text("a gift for ${it.to}", style = hand(17.sp, Ink.Accent)) }
                 val why = e.reasons.filter { !it.pass }.joinToString(". ") { it.message }
                 Text(if (why.isNotBlank() && e.status != "completed") "$why. ${e.summary}" else e.summary, style = body(13.sp, color = Ink.Muted))
                 if (e.retailer != null && e.type != "paypal") Text("${e.retailer} · demo store · sandbox", style = body(11.sp, color = Ink.Grey))
