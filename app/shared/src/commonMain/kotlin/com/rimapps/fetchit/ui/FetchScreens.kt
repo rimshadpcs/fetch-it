@@ -280,7 +280,7 @@ fun WhichOneScreen(app: AppState) {
             BackButton({ app.back() })
             Text("Which one?", style = hand(30.sp))
         }
-        Text("I spotted a few things. Pick the ones you want.", style = body(16.sp, color = Ink.Muted), modifier = Modifier.padding(start = 70.dp, top = 4.dp, end = 20.dp))
+        Text("I spotted a few things. Tap the one you want.", style = body(16.sp, color = Ink.Muted), modifier = Modifier.padding(start = 70.dp, top = 4.dp, end = 20.dp))
         BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).padding(20.dp), contentAlignment = Alignment.Center) {
             // Photo with the item boxes drawn on top; tapping a box picks it.
             Box(Modifier.fillMaxSize().sharedPhoto(PHOTO_KEY).background(Color(0xFF3E3C38))) {
@@ -304,28 +304,22 @@ fun WhichOneScreen(app: AppState) {
         }
         Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items.forEachIndexed { i, item ->
+                // Nothing is picked to start; tapping an item ticks it and fetches it right away.
                 ItemPickRow(item.item_type.ifBlank { item.search_query }, item.colors.firstOrNull(), i in s.picked, enabled = !s.loading) {
-                    s.picked = if (i in s.picked) s.picked - i else s.picked + i
+                    s.picked = setOf(i)
+                    app.chooseItems(listOf(i))
                 }
             }
             if (s.loading) Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 RunningDog(48.dp)
-                Text(if (s.picked.size > 1) "Checking stores for ${s.picked.size} things…" else "Checking stores…", style = body(14.sp, FontWeight.SemiBold))
+                Text("Checking stores…", style = body(14.sp, FontWeight.SemiBold))
             }
             ErrorNote(s.error)
         }
-        // Nothing is picked to start; the button lights up once something is.
-        val n = s.picked.size
-        PillButton(
-            when (n) { 0 -> "Pick what to fetch"; 1 -> "Fetch it"; else -> "Fetch these $n" },
-            enabled = n > 0, loading = s.loading,
-            modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp),
-            onClick = { app.chooseItems(items.indices.filter { it in s.picked }) },
-        )
     }
 }
 
-/** A detected item to tick: picking fills it black from the left and draws a ✓ (multi-select). */
+/** A detected item: tapping fills it black from the left and draws a ✓ while it's fetched. */
 @Composable
 private fun ItemPickRow(label: String, color: String?, on: Boolean, enabled: Boolean, onClick: () -> Unit) {
     val reduce = LocalReduceMotion.current
