@@ -494,7 +494,7 @@ private fun GiftBudgetCard(budget: Double, modifier: Modifier, onChange: (Double
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(25.0, 50.0, 100.0).forEach { v -> Chip(money(v), budget == v, onClick = { last = v; onChange(v) }) }
                 }
-                AmountField(budget, { last = it; onChange(it) }, " a month for gifts", style = body(28.sp, FontWeight.Medium))
+                AmountField(budget, { last = it; onChange(it) }, " a month", style = body(28.sp, FontWeight.Medium))
             }
         }
         Text(

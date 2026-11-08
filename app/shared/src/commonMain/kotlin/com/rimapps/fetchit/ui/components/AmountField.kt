@@ -84,7 +84,8 @@ fun AmountField(value: Double, onChange: (Double) -> Unit, suffix: String, modif
                         singleLine = true, textStyle = style,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
                         keyboardActions = KeyboardActions(onDone = { commit(); focusManager.clearFocus() }),
-                        modifier = Modifier.widthIn(min = 40.dp).focusRequester(focus).onFocusChanged { if (!it.isFocused && editing) commit() },
+                        // Sized to the digits typed: inside the intrinsic-width column a free-width field got squeezed and cut 4+ digits off.
+                        modifier = Modifier.width((text.length.coerceAtLeast(2) * style.fontSize.value * 0.64f + 4).dp).focusRequester(focus).onFocusChanged { if (!it.isFocused && editing) commit() },
                     )
                 } else {
                     CountUpMoney(
