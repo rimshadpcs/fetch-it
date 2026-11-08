@@ -89,6 +89,10 @@ import com.rimapps.fetchit.platform.openBrowser
 import com.rimapps.fetchit.ui.components.AmountField
 import com.rimapps.fetchit.ui.components.CheckMark
 import com.rimapps.fetchit.ui.components.Chip
+import com.rimapps.fetchit.ui.icons.DoodleIcon
+import com.rimapps.fetchit.ui.icons.Doodle
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.expandVertically
 import com.rimapps.fetchit.ui.components.PillButton
 import com.rimapps.fetchit.ui.components.Segmented
 import com.rimapps.fetchit.ui.components.SizePicker
@@ -447,6 +451,7 @@ fun RulesEditor(initial: HouseRules, focus: RuleFocus? = null, onChange: (HouseR
             BudgetBar((r.perItemLimit / r.monthlyBudget).toFloat(), color = if (r.perItemLimit > r.monthlyBudget) Ink.Accent else Ink.Ink)
             Text("Anything over the limit asks for your fingerprint.", style = hand(18.sp, Ink.Muted))
         }
+        GiftBudgetCard(r.giftBudget, Modifier.fillMaxWidth().rulesSection(focus == RuleFocus.Gifts)) { update(r.copy(giftBudget = it)) }
         Column(Modifier.rulesSection(focus == RuleFocus.Categories), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("I can shop for…", style = hand(24.sp), modifier = Modifier.weight(1f))
@@ -461,20 +466,42 @@ fun RulesEditor(initial: HouseRules, focus: RuleFocus? = null, onChange: (HouseR
                 }
             }
         }
-        PaperNote(tilt = -0.5f, modifier = Modifier.fillMaxWidth().rulesSection(focus == RuleFocus.Gifts)) {
-            Text("Gifts for other people", style = hand(22.sp))
-            AmountField(r.giftBudget, { update(r.copy(giftBudget = it)) }, " a month", style = body(28.sp, FontWeight.Medium))
-            Text(
-                if (r.giftBudget <= 0) "Off: I won't send gifts. Set an amount to send things to Mom, friends…"
-                else "Gifts come out of this, not your monthly budget. They ship to their saved place, with your note.",
-                style = body(13.sp, color = Ink.Muted),
-            )
-        }
         PaperNote(tilt = 0.5f, modifier = Modifier.fillMaxWidth().rulesSection(focus == RuleFocus.Asks)) {
             Toggle("Ask before a new store", r.askBeforeNewStore) { update(r.copy(askBeforeNewStore = it)) }
             Toggle("Ask if I'm unsure about size", r.askIfUnsureAboutSize) { update(r.copy(askIfUnsureAboutSize = it)) }
             Toggle("Only ship to saved places", r.onlyShipToSavedPlaces) { update(r.copy(onlyShipToSavedPlaces = it)) }
         }
+    }
+}
+
+/**
+ * Gifts as an opt-in: off = Scout never sends anything to other people. On → a separate monthly gift budget (quick picks
+ * or typed); gifts ship to someone's saved place with a note and never use your own sizes.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun GiftBudgetCard(budget: Double, modifier: Modifier, onChange: (Double) -> Unit) {
+    var last by remember { mutableStateOf(budget.takeIf { it > 0 } ?: 50.0) }
+    val on = budget > 0
+    PaperNote(tilt = -0.5f, modifier = modifier) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            DoodleIcon(Doodle.Heart, null, size = 22.dp, color = Ink.Accent, strokeWidth = 4.4f)
+            Text("Gifts for other people", style = hand(22.sp))
+        }
+        Toggle("Let me send gifts", on) { want -> onChange(if (want) last else 0.0) }
+        AnimatedVisibility(on, enter = expandVertically(tween(250)) + fadeIn(tween(200)), exit = shrinkVertically(tween(200)) + fadeOut(tween(150))) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(25.0, 50.0, 100.0).forEach { v -> Chip(money(v), budget == v, onClick = { last = v; onChange(v) }) }
+                }
+                AmountField(budget, { last = it; onChange(it) }, " a month for gifts", style = body(28.sp, FontWeight.Medium))
+            }
+        }
+        Text(
+            if (!on) "Off: I'll only shop for you. Turn it on to send things to Mom, friends…"
+            else "Separate from your monthly budget. Pick who it's for when you buy: it ships to their saved place with your note, and I'll ask their size.",
+            style = body(13.sp, color = Ink.Muted),
+        )
     }
 }
 

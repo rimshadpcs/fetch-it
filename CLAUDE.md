@@ -706,6 +706,6 @@ reduce motion.
         failure / cancel. PayPal description "Gift for Mom: …". Tests: `npm test` (+2, 55 total after the webhook tests went),
         `test/gift.mjs` (emulators + sandbox, 4: normal buy blocked at $290/$300 but the gift goes through on the gift budget,
         PayPal `28A36887K8149803N`, shipped to Jane Doe, note on the order; 2nd gift over $50 → blocked; cancel → giftCents 0).
-        App: Rules "Gifts for other people" amount; Results "gift" chip → `GiftSheet` (pick a saved place, note ≤ 200,
+        App: Rules + onboarding "Gifts for other people" card right after the budget (off by default; toggle → $25/$50/$100 chips or typed); Results "gift" chip → `GiftSheet` (pick a saved place, note ≤ 200,
         "+ add someone's address"); Buy bar says "gift to ▾ Mom"; Bought + Activity show "a gift for Mom". Saved / Goes well
         with buy panels don't offer gifts yet.
