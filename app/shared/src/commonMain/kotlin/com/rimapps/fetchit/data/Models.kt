@@ -280,8 +280,6 @@ data class ActivityEntry(
     val promisedDeliveryDate: String? = null,
     val trackingNumber: String? = null,
     val gift: Gift? = null,
-    /** Set when Scout wrote [summary] from PayPal's own data (dispute read with the PayPal Agent Toolkit). */
-    val summarizedBy: String? = null,
     /** Epoch millis (Firestore timestampValue). */
     val createdAt: Long = 0,
 )
