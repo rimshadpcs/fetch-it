@@ -133,7 +133,7 @@ data class HouseRules(
     val monthlyBudget: Double = 200.0,
     val perItemLimit: Double = 75.0,
     val allowedCategories: List<String> = listOf("home-garden", "apparel-accessories", "media"),
-    val askBeforeNewStore: Boolean = true,
+    val askBeforeNewStore: Boolean = false, // off by default: every store is new at first, so it asked on nearly every buy
     val onlyShipToSavedPlaces: Boolean = true,
     val askIfUnsureAboutSize: Boolean = true,
     /** Monthly budget for gifts (shipped to someone else); 0 = no gifts. */

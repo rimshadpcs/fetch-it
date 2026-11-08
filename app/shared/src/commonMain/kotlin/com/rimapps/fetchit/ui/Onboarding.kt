@@ -452,6 +452,11 @@ fun RulesEditor(initial: HouseRules, focus: RuleFocus? = null, onChange: (HouseR
             Text("Anything over the limit asks for your fingerprint.", style = hand(18.sp, Ink.Muted))
         }
         GiftBudgetCard(r.giftBudget, Modifier.fillMaxWidth().rulesSection(focus == RuleFocus.Gifts)) { update(r.copy(giftBudget = it)) }
+        PaperNote(tilt = 0.5f, modifier = Modifier.fillMaxWidth().rulesSection(focus == RuleFocus.Asks)) {
+            Toggle("Ask before a new store", r.askBeforeNewStore) { update(r.copy(askBeforeNewStore = it)) }
+            Toggle("Ask if I'm unsure about size", r.askIfUnsureAboutSize) { update(r.copy(askIfUnsureAboutSize = it)) }
+            Toggle("Only ship to saved places", r.onlyShipToSavedPlaces) { update(r.copy(onlyShipToSavedPlaces = it)) }
+        }
         Column(Modifier.rulesSection(focus == RuleFocus.Categories), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("I can shop for…", style = hand(24.sp), modifier = Modifier.weight(1f))
@@ -465,11 +470,6 @@ fun RulesEditor(initial: HouseRules, focus: RuleFocus? = null, onChange: (HouseR
                     update(r.copy(allowedCategories = if (on) r.allowedCategories - slug else r.allowedCategories + slug))
                 }
             }
-        }
-        PaperNote(tilt = 0.5f, modifier = Modifier.fillMaxWidth().rulesSection(focus == RuleFocus.Asks)) {
-            Toggle("Ask before a new store", r.askBeforeNewStore) { update(r.copy(askBeforeNewStore = it)) }
-            Toggle("Ask if I'm unsure about size", r.askIfUnsureAboutSize) { update(r.copy(askIfUnsureAboutSize = it)) }
-            Toggle("Only ship to saved places", r.onlyShipToSavedPlaces) { update(r.copy(onlyShipToSavedPlaces = it)) }
         }
     }
 }

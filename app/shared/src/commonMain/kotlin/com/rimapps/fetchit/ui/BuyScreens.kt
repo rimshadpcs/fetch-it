@@ -269,6 +269,7 @@ fun ApproveScreen(app: AppState, screen: Screen.Approve) {
     var busy by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var allowCategory by remember { mutableStateOf(false) }
+    var stopNewStoreAsk by remember { mutableStateOf(false) }
     val pulse by rememberInfiniteTransition(label = "pulse").animateFloat(1f, 1.04f, infiniteRepeatable(tween(800), RepeatMode.Reverse), label = "s")
 
     fun run(kind: String, call: suspend () -> Purchase) {
@@ -303,11 +304,15 @@ fun ApproveScreen(app: AppState, screen: Screen.Approve) {
                     Text(p.retailer ?: p.merchant, style = serif(17.sp, Ink.Muted))
                 }
             }
-            ReasonsNote(p, extra = "${app.dogName} found it, but it's outside the rules you set.")
+            val failing = p.reasons.filter { !it.pass }
+            val newStore = failing.any { it.rule == "new_store" }
+            ReasonsNote(p, extra = if (failing.all { it.rule == "new_store" }) "Everything else fits your rules. You asked me to check before buying from a new store."
+                else "${app.dogName} found it, but it's outside the rules you set.")
             // Outside the categories: approve this one, and optionally allow the category from now on.
             p.reasons.firstOrNull { it.rule == "category" && !it.pass }?.let { r ->
                 Toggle("Always allow ${r.message.substringBefore(" isn't in your allowed categories")}", allowCategory) { allowCategory = it }
             }
+            if (newStore) Toggle("Don't ask about new stores again", stopNewStoreAsk) { stopNewStoreAsk = it }
             Text(
                 "Change rule ›", style = body(14.sp, FontWeight.SemiBold, Ink.Muted),
                 modifier = Modifier.align(Alignment.End).clip(RoundedCornerShape(999.dp)).clickable { app.go(changeRuleTarget(p.reasons)) }.padding(horizontal = 10.dp, vertical = 8.dp),
@@ -315,7 +320,12 @@ fun ApproveScreen(app: AppState, screen: Screen.Approve) {
             ErrorNote(error)
             PillButton("Approve with fingerprint", loading = busy == "approve", modifier = Modifier.scale(if (busy == null) pulse else 1f), onClick = {
                 approver.approve("Approve ${money(p.price, p.currency)}", p.title) { ok ->
-                    if (ok) run("approve") { app.api.approvePurchase(p.purchaseId, allowCategory).also { if (allowCategory) app.refresh() } }
+                    if (ok) run("approve") {
+                        app.api.approvePurchase(p.purchaseId, allowCategory).also {
+                            if (stopNewStoreAsk) app.rules?.let { r -> runCatching { app.rules = app.api.setRules(r.copy(askBeforeNewStore = false)) } }
+                            if (allowCategory) app.refresh()
+                        }
+                    }
                 }
             })
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
