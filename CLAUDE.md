@@ -694,8 +694,8 @@ reduce motion.
       99 KB JPEG in 4.5 s, wayfair.com → its preview image, Instagram hint, 169.254.169.254 / localhost refused).
       Deployed Nov 8 (linkPhoto, watchOffer, checkWatches, checkWatchesNow); not seen on a device.
 - [~] Goes well with, Gift mode (Nov 8). Deployed Nov 8. PayPal webhooks + the Agent Toolkit dispute reader were built and
-      deployed the same day, then removed (drifting from a consumer app); the sandbox webhook registration and the deployed
-      paypalWebhook function are to be deleted. Not seen on a device.
+      deployed the same day, then removed (drifting from a consumer app); the deployed paypalWebhook function and the
+      sandbox webhook registration (6KK242923K750983P) were deleted Nov 8. Not seen on a device.
       - **completeLook**: lamp → bulbs / brass tray / pillar candles etc., 9 s first call (cached after). `npm test` (+2),
         `test/look.mjs`. App: `ui/Look.kt` "goes well with" on the Order screen (tap a card → price, sizes, Buy armed after
         0.8 s, ships to the default place); Bought screen links "what goes with it? ›".
