@@ -73,7 +73,7 @@ fun App(register: ((() -> Boolean) -> Unit)? = null) {
     val scope = rememberCoroutineScope()
     val app = remember { AppState(scope) }
     LaunchedEffect(Unit) {
-        register?.invoke { app.back() }
+        register?.invoke { app.backInterceptor?.invoke() ?: app.back() }
         if (app.api.firebase.signedIn) {
             app.refresh()
             if (app.onboarded) app.registerPush()

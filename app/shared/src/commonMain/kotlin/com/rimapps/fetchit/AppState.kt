@@ -168,6 +168,9 @@ class AppState(val scope: CoroutineScope, val api: FetchApi = FetchApi()) {
 
     // ---- Navigation ----
     fun go(s: Screen) { stack.add(s) }
+    /** A screen that must act before leaving (Rules saves its draft) sets this; the system back gesture calls it. */
+    var backInterceptor: (() -> Boolean)? = null
+
     fun back(): Boolean = if (stack.size > 1) { stack.removeAt(stack.lastIndex); true } else false
     /** Switch tab / restart a flow: replace the whole stack. */
     fun reset(s: Screen) { stack.clear(); stack.add(s) }

@@ -65,6 +65,7 @@ import kotlin.time.ExperimentalTime
 fun BuyingScreen(app: AppState, screen: Screen.Buying) {
     var purchase by remember { mutableStateOf<Purchase?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    val rulesAtStart = remember(screen.requestId) { app.rules }
     LaunchedEffect(screen.requestId) {
         try {
             // Re-entering this screen joins the same call instead of starting another (AppState.buy).
@@ -80,9 +81,17 @@ fun BuyingScreen(app: AppState, screen: Screen.Buying) {
     when {
         error != null -> Outcome(app, null, title = "Hmm.", note = error!!)
         p == null -> Checking(app, screen.offer.title)
+        // Blocked, then the user changed a rule ("Change rule" → back): offer the same buy again under the new rules.
+        p.status == "blocked" && rulesAtStart != null && app.rules != rulesAtStart -> Outcome(
+            app, p, title = "Rules changed.", note = "Want me to try again with your new house rules?",
+            secondary = "Try again" to { app.replace(screen.copy(requestId = newRequestId())) },
+        )
         else -> PurchaseView(app, p) { purchase = it }
     }
 }
+
+@OptIn(kotlin.uuid.ExperimentalUuidApi::class)
+private fun newRequestId() = kotlin.uuid.Uuid.random().toHexString()
 
 @Composable
 fun DoneScreen(app: AppState, screen: Screen.Done) {

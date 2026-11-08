@@ -42,6 +42,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -227,9 +228,27 @@ fun RulesScreen(app: AppState, screen: Screen.Rules) {
     var done by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) { app.refresh() }
+    // Save the draft, then (when a "Change rule" link brought us here, or on back) return to where the user was.
+    fun save(thenBack: Boolean) {
+        busy = true; error = null
+        scope.launch {
+            runCatching { app.api.setRules(draft) }
+                .onSuccess { app.rules = it; busy = false; if (thenBack) app.back() else { done = true; delay(600); done = false } }
+                .onFailure { error = it.friendly() }
+            busy = false
+        }
+    }
+    // Read live (the system back callback is registered once): state reads, not values captured at first composition.
+    fun onBack(): Boolean {
+        if (busy) return true
+        if (draft != (app.rules ?: HouseRules()) && draft.allowedCategories.isNotEmpty()) save(thenBack = true) else app.back()
+        return true
+    }
+    DisposableEffect(Unit) { app.backInterceptor = { onBack() }; onDispose { app.backInterceptor = null } }
     Column(Modifier.fillMaxSize().dotted().padding(top = 56.dp, bottom = 34.dp)) {
         Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            BackButton({ app.back() })
+            // Back keeps the change: nobody expects to lose an edited rule by leaving.
+            BackButton({ onBack() })
             Text("House rules", style = hand(30.sp))
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(start = 24.dp, end = 24.dp, top = 12.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -242,14 +261,8 @@ fun RulesScreen(app: AppState, screen: Screen.Rules) {
             RulesEditor(saved, focus = screen.focus) { draft = it }
             ErrorNote(error)
         }
-        if (draft != saved || done) PillButton("Save rules", loading = busy, done = done, enabled = draft.allowedCategories.isNotEmpty(), modifier = Modifier.padding(horizontal = 20.dp), onClick = {
-            busy = true; error = null
-            scope.launch {
-                runCatching { app.api.setRules(draft) }
-                    .onSuccess { busy = false; done = true; delay(600); app.rules = it; done = false }
-                    .onFailure { error = it.friendly() }
-                busy = false
-            }
+        if (draft != saved || done) PillButton(if (screen.focus != null) "Save and go back" else "Save rules", loading = busy, done = done, enabled = draft.allowedCategories.isNotEmpty(), modifier = Modifier.padding(horizontal = 20.dp), onClick = {
+            save(thenBack = screen.focus != null)
         })
     }
 }
