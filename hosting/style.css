@@ -1,0 +1,11 @@
+:root { --bg:#F7F7F6; --ink:#111111; --muted:#6E6E6B; --note:#F1F1EF; --border:#E4E4E1; --accent:#E8402A; }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.6 Figtree, system-ui, -apple-system, sans-serif; }
+main { max-width:720px; margin:0 auto; padding:40px 16px 64px; }
+h1 { font-family:"Gochi Hand", cursive; font-weight:400; font-size:44px; line-height:1.1; margin:0 0 4px; }
+h2 { font-size:19px; margin:32px 0 6px; }
+.muted { color:var(--muted); }
+.note { background:var(--note); border:1px solid var(--border); border-radius:12px; padding:14px 16px; margin:20px 0; }
+a { color:var(--ink); }
+ul { padding-left:22px; }
+footer { margin-top:48px; color:var(--muted); font-size:14px; }
