@@ -595,7 +595,10 @@ private fun ResultsFor(app: AppState, s: FetchSession, r: FetchResponse) {
                 )
             }
             val sizes = offer?.sizes.orEmpty()
+            // A gift is for someone else: never your saved size; their size must be picked before Buy.
+            val needsGiftSize = gift != null && sizes.isNotEmpty() && size == null
             if (sizes.isNotEmpty()) {
+                if (gift != null) Text(if (size == null) "Which size for ${gift!!.to}?" else "Size for ${gift!!.to}", style = hand(19.sp, if (size == null) Ink.Accent else Ink.Muted))
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     sizes.forEach { s -> Chip(s.label, s.label == size, onClick = { size = s.label }) }
                 }
@@ -614,13 +617,14 @@ private fun ResultsFor(app: AppState, s: FetchSession, r: FetchResponse) {
                 Box(
                     Modifier.weight(1f).height(56.dp).clip(RoundedCornerShape(999.dp)).background(Ink.Ink)
                         .drawWithContent { drawContent(); drawn = true }
-                        .buyGesture(enabled = armed && offer != null && place != null) {
+                        .buyGesture(enabled = armed && offer != null && place != null && !needsGiftSize) {
                             val g = gift
                             app.go(if (g != null) Screen.Buying(offer!!, size, newRequestId(), g.placeId, g.note) else Screen.Buying(offer!!, size, newRequestId(), place!!.placeId))
                         },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (needsGiftSize) Text("Pick ${gift!!.to}'s size", style = body(16.sp, FontWeight.SemiBold, Ink.White.copy(alpha = 0.6f)))
+                    else Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Buy · ", style = body(16.sp, FontWeight.SemiBold, Ink.White))
                         Text(money(offer?.price, offer?.currency ?: "USD"), style = serif(20.sp, Ink.White))
                     }
@@ -629,7 +633,11 @@ private fun ResultsFor(app: AppState, s: FetchSession, r: FetchResponse) {
         }
         PlacePickerSheet(app, picking, place?.placeId, onPick = { placeId = it.placeId; picking = false }, onDismiss = { picking = false })
         WatchSheet(app, watching, offer, size, place?.placeId, onDismiss = { watching = false })
-        GiftSheet(app, gifting, gift, onPick = { gift = it; gifting = false }, onDismiss = { gifting = false })
+        GiftSheet(app, gifting, gift, onPick = {
+            // Switching to a gift drops your own size; back to yourself restores it.
+            if ((it == null) != (gift == null)) size = if (it == null) offer?.let { o -> defaultSize(app, o) } else null
+            gift = it; gifting = false
+        }, onDismiss = { gifting = false })
     }
 }
 
