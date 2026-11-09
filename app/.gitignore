@@ -21,3 +21,6 @@ node_modules/
 # Firebase client config (has the project API key): kept out of the public repo
 androidApp/google-services.json
 iosApp/iosApp/GoogleService-Info.plist
+
+# Signed release builds (APK/AAB)
+androidApp/release/
